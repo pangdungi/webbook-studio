@@ -9,6 +9,12 @@ export const bookBodyFontFamily =
 
 export const bookFontFaceCss = `@import url("${NOTO_SERIF_KR_GOOGLE_CSS}");`;
 
+/** 편집기·리더 본문 영역 — 동일 너비·여백 */
+export const BOOK_PROSE_MAX_WIDTH = "42rem";
+export const BOOK_PROSE_PADDING = "1rem 0.875rem";
+
+export const bookChapterTitleClass = "book-chapter-title";
+
 /** EPUB iframe — Google Fonts 로드 (부모 페이지 폰트는 상속되지 않음) */
 export function injectBookFonts(doc: Document) {
   if (doc.getElementById("webbook-reader-fonts")) return;
@@ -19,15 +25,6 @@ export function injectBookFonts(doc: Document) {
   doc.head.prepend(link);
 }
 
-/** 책 본문 타이포 계층 — 편집기·EPUB·리더 공통 기준
- *
- * 한국 소설·에세이 전자책 관례 (교보문고·KDP·국내 EPUB 가이드 참고):
- * - 본문: 양쪽 정렬 + 첫 줄 들여쓰기 1em + 마지막 줄 왼쪽 정렬
- * - 제목·인용: 왼쪽 정렬, 들여쓰기 없음
- * - 줄간격: 1.75~1.8
- * - em 단위 사용 (화면 크기 대응)
- */
-
 export const typographyGuide = {
   chapter: "왼쪽 목차 (1장, 2장…) — 책의 큰 단락",
   h1: "대제목 — 챕터 안의 큰 주제",
@@ -36,7 +33,6 @@ export const typographyGuide = {
   p: "본문 — 양쪽 정렬 + 들여쓰기 (한국 소설형)",
 } as const;
 
-/** 본문 p — 좁은 화면은 왼쪽 정렬, 넓을 때만 양쪽 정렬 */
 export const bodyParagraphStyles = {
   "font-size": "1em",
   "font-weight": "400",
@@ -51,42 +47,238 @@ export const bodyParagraphStyles = {
   "margin-bottom": "0",
 } as const;
 
-/**
- * 본문 반응형 정렬 — container query로 읽기 영역 너비 기준
- * (viewport가 아닌 iframe·편집기 실제 너비 → 미리보기·모바일에서도 정확)
- *
- * 32em 미만: 왼쪽 정렬 (양쪽정렬 시 단어 간격 늘림 방지)
- * 32em 이상: 양쪽 정렬 + 마지막 줄 왼쪽 (한국 소설·에세이 PC/태블릿 관례)
- */
-export const responsiveBodyTextCss = `
-  html {
-    container-type: inline-size;
-    container-name: page;
-  }
-  p.book-body-p,
-  p {
-    text-align: left;
-    text-indent: 1em;
-    word-break: keep-all;
-    overflow-wrap: anywhere;
-    word-spacing: normal;
-    letter-spacing: 0;
-    text-wrap: pretty;
-    max-width: 100%;
-  }
-  @container page (min-width: 32em) {
-    p.book-body-p,
-    p {
-      text-align: justify;
-      text-align-last: left;
-      text-justify: inter-word;
+/** 본문·제목·인용 — contentRoot 예: body, .book-prose .ProseMirror */
+function proseContentCss(contentRoot: string, important = false) {
+  const i = important ? " !important" : "";
+  const r = contentRoot;
+
+  return `
+    ${r} h1, ${r} h1.${bookChapterTitleClass} {
+      font-size: 1.45em${i};
+      font-weight: 700${i};
+      line-height: 1.4${i};
+      text-align: left${i};
+      text-indent: 0${i};
+      margin: 1.75em 0 0.65em${i};
+      color: #0c0a09${i};
+      word-break: keep-all${i};
     }
+    ${r} h2 {
+      font-size: 1.2em${i};
+      font-weight: 600${i};
+      line-height: 1.45${i};
+      text-align: left${i};
+      text-indent: 0${i};
+      margin: 1.35em 0 0.45em${i};
+      color: #1c1917${i};
+      word-break: keep-all${i};
+    }
+    ${r} h3 {
+      font-size: 1.05em${i};
+      font-weight: 600${i};
+      line-height: 1.5${i};
+      text-align: left${i};
+      text-indent: 0${i};
+      margin: 1.1em 0 0.35em${i};
+      color: #292524${i};
+      word-break: keep-all${i};
+    }
+    ${r} p.book-body-p,
+    ${r} p {
+      font-size: 1em${i};
+      font-weight: 400${i};
+      line-height: 1.75${i};
+      text-align: left${i};
+      text-indent: 1em${i};
+      word-break: keep-all${i};
+      overflow-wrap: anywhere${i};
+      word-spacing: normal${i};
+      letter-spacing: 0${i};
+      text-wrap: pretty${i};
+      margin: 0${i};
+      max-width: 100%${i};
+      color: #1c1917${i};
+    }
+    ${r} h1 + p, ${r} h2 + p, ${r} h3 + p, ${r} hr + p, ${r} blockquote + p {
+      text-indent: 0${i};
+    }
+    ${r} blockquote {
+      font-size: 0.95em${i};
+      font-style: normal${i};
+      text-align: left${i};
+      text-indent: 0${i};
+      color: #44403c${i};
+      border-left: 2px solid #d6d3d1${i};
+      padding: 0 0 0 0.85em${i};
+      margin: 0.85em 0${i};
+    }
+    ${r} blockquote p {
+      text-align: left${i};
+      text-indent: 0${i};
+      margin: 0.35em 0${i};
+    }
+    ${r} hr {
+      border: none${i};
+      border-top: 1px solid #e7e5e4${i};
+      margin: 1.75em 0${i};
+    }
+    ${r} strong, ${r} b {
+      font-weight: 700${i};
+    }
+  `;
+}
+
+function proseContainerCss(containerSelector: string, important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    ${containerSelector} {
+      container-type: inline-size${i};
+      container-name: page${i};
+    }
+    @container page (min-width: 32em) {
+      ${containerSelector} p.book-body-p,
+      ${containerSelector} p {
+        text-align: justify${i};
+        text-align-last: left${i};
+        text-justify: inter-word${i};
+      }
+    }
+  `;
+}
+
+function proseSurfaceCss(surfaceSelector: string, important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    ${surfaceSelector} {
+      font-family: ${bookBodyFontFamily}${i};
+      font-size: 100%${i};
+      line-height: 1.75${i};
+      color: #1c1917${i};
+      max-width: ${BOOK_PROSE_MAX_WIDTH}${i};
+      margin-left: auto${i};
+      margin-right: auto${i};
+      padding: ${BOOK_PROSE_PADDING}${i};
+      width: 100%${i};
+      box-sizing: border-box${i};
+      -webkit-text-size-adjust: 100%${i};
+      overflow-x: hidden${i};
+    }
+  `;
+}
+
+const readerImageAlignCss = `
+  img[data-align="center"] {
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
   }
-  h1 + p, h2 + p, h3 + p, hr + p, blockquote + p {
-    text-indent: 0;
+  img[data-align="left"] {
+    display: block !important;
+    margin-right: auto !important;
+    margin-left: 0 !important;
+  }
+  img[data-align="right"] {
+    display: block !important;
+    margin-left: auto !important;
+    margin-right: 0 !important;
   }
 `;
 
+function proseImageCss(viewMode: "scroll" | "paginated") {
+  const scrollImageCss = `
+    img {
+      max-width: 100% !important;
+      width: auto !important;
+      height: auto !important;
+      display: block !important;
+      margin: 1.25em auto !important;
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    ${readerImageAlignCss}
+  `;
+  return viewMode === "paginated"
+    ? `
+    img {
+      max-width: 100% !important;
+      width: auto !important;
+      height: auto !important;
+      break-inside: avoid;
+      -webkit-column-break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .webbook-img-wrap img {
+      display: inline-block !important;
+      margin: 0 !important;
+    }
+    ${columnImageWrapperCss}
+  `
+    : scrollImageCss;
+}
+
+/** 편집기 — layout.tsx에서 주입 */
+export function bookEditorCss() {
+  return `
+    .book-prose {
+      container-type: inline-size;
+      container-name: page;
+      max-width: ${BOOK_PROSE_MAX_WIDTH};
+      margin-left: auto;
+      margin-right: auto;
+      padding: ${BOOK_PROSE_PADDING};
+      font-family: ${bookBodyFontFamily};
+      font-size: 100%;
+      line-height: 1.75;
+      color: #1c1917;
+      box-sizing: border-box;
+    }
+    .book-prose .ProseMirror {
+      outline: none;
+      min-height: 400px;
+    }
+    .book-prose > h1.${bookChapterTitleClass} {
+      margin-top: 0;
+    }
+    .book-prose > h1.${bookChapterTitleClass} + .book-prose-editor .ProseMirror > p:first-of-type {
+      text-indent: 0 !important;
+    }
+    ${proseContentCss(".book-prose .ProseMirror")}
+    ${proseContainerCss(".book-prose")}
+    .book-prose .ProseMirror p.is-editor-empty:first-child::before {
+      color: #a8a29e;
+      content: attr(data-placeholder);
+      float: left;
+      height: 0;
+      pointer-events: none;
+    }
+    .book-prose .ProseMirror img {
+      max-width: 100%;
+      height: auto;
+      border-radius: 0.5rem;
+      margin: 1.25em 0;
+    }
+    .book-prose .ProseMirror img[data-align="center"] {
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .book-prose .ProseMirror img[data-align="left"] {
+      display: block;
+      margin-right: auto;
+      margin-left: 0;
+    }
+    .book-prose .ProseMirror img[data-align="right"] {
+      display: block;
+      margin-left: auto;
+      margin-right: 0;
+    }
+  `;
+}
+
+/** epub.js themes — EPUB style.css와 동일 값 */
 export const readerThemeStyles = {
   body: {
     "font-family": bookBodyFontFamily,
@@ -94,6 +286,9 @@ export const readerThemeStyles = {
     "line-height": "1.75",
     color: "#1c1917",
     padding: "0",
+    margin: "0",
+    "max-width": BOOK_PROSE_MAX_WIDTH,
+    width: "100%",
   },
   h1: {
     "font-size": "1.45em",
@@ -144,113 +339,24 @@ export function epubTypographyCss(writingModeCss: string) {
     ${bookFontFaceCss}
     ${writingModeCss}
     * { box-sizing: border-box; }
-    body {
-      font-family: ${bookBodyFontFamily};
-      font-size: 100%;
-      line-height: 1.75;
-      color: #1c1917;
-      padding: 1rem 0.875rem;
-      margin: 0;
-      width: 100%;
-      max-width: 100%;
-      overflow-x: hidden;
-      -webkit-text-size-adjust: 100%;
-    }
     html {
       width: 100%;
       max-width: 100%;
       overflow-x: hidden;
     }
-    h1, h2, h3, h4, h5, h6 {
-      text-align: left;
-      text-indent: 0;
-      font-weight: 700;
-      word-break: keep-all;
-    }
-    h1 {
-      font-size: 1.45em;
-      line-height: 1.4;
-      margin: 1.75em 0 0.65em;
-      color: #0c0a09;
-    }
-    h2 {
-      font-size: 1.2em;
-      font-weight: 600;
-      line-height: 1.45;
-      margin: 1.35em 0 0.45em;
-    }
-    h3 {
-      font-size: 1.05em;
-      font-weight: 600;
-      line-height: 1.5;
-      margin: 1.1em 0 0.35em;
-    }
-    p.book-body-p,
-    p {
-      font-size: 1em;
-      font-weight: 400;
-      line-height: 1.75;
+    ${proseSurfaceCss("body")}
+    body {
       margin: 0;
     }
-    ${responsiveBodyTextCss}
-    ${columnImageWrapperCss}
-    img {
-      max-width: 100% !important;
-      width: auto !important;
-      height: auto !important;
-      display: block;
-      margin: 1.25em auto;
-      break-inside: avoid;
-      -webkit-column-break-inside: avoid;
-      page-break-inside: avoid;
-    }
-    .webbook-img-wrap img {
-      display: inline-block !important;
-      margin: 0 !important;
-      margin-left: 0 !important;
-      margin-right: 0 !important;
-    }
-    blockquote {
-      font-size: 0.95em;
-      text-align: left;
-      text-indent: 0;
-      border-left: 2px solid #d6d3d1;
-      padding: 0 0 0 0.85em;
-      margin: 0.85em 0;
-      color: #44403c;
-    }
-    blockquote p {
-      text-align: left;
-      text-indent: 0;
-      margin: 0.35em 0;
-    }
-    hr {
-      border: none;
-      border-top: 1px solid #e7e5e4;
-      margin: 1.75em 0;
-    }
-    strong, b { font-weight: 700; }
+    ${proseContentCss("body")}
+    ${proseContainerCss("html")}
+    ${proseImageCss("scroll")}
     .epub-author, .epub-link { display: none; }
+    h1.${bookChapterTitleClass} {
+      margin-top: 0;
+    }
   `;
 }
-
-const readerImageAlignCss = `
-  img[data-align="center"] {
-    display: block !important;
-    margin-left: auto !important;
-    margin-right: auto !important;
-  }
-  img[data-align="left"] {
-    display: block !important;
-    margin-right: auto !important;
-    margin-left: 0 !important;
-  }
-  img[data-align="right"] {
-    display: block !important;
-    margin-left: auto !important;
-    margin-right: 0 !important;
-  }
-`;
 
 export function readerInjectCss(
   writingMode: "horizontal-tb" | "vertical-rl",
@@ -258,71 +364,27 @@ export function readerInjectCss(
 ) {
   const modeCss =
     writingMode === "vertical-rl"
-      ? `body { writing-mode: vertical-rl; text-orientation: mixed; }`
+      ? `body { writing-mode: vertical-rl !important; text-orientation: mixed !important; }`
       : "";
-  const scrollImageCss = `
-    img {
-      display: block !important;
-      margin-top: 1.25em !important;
-      margin-bottom: 1.25em !important;
-    }
-    ${readerImageAlignCss}
-  `;
-  const paginatedImageCss = columnImageWrapperCss;
+
   return `
     ${modeCss}
-    html, body {
-      margin: 0 !important;
-      padding: 1rem 0.875rem !important;
+    html {
       width: 100% !important;
       max-width: 100% !important;
       overflow-x: hidden !important;
-      box-sizing: border-box !important;
-      -webkit-text-size-adjust: 100% !important;
-      font-family: ${bookBodyFontFamily} !important;
-    }
-    *, *::before, *::after {
-      box-sizing: border-box !important;
-    }
-    html {
-      container-type: inline-size !important;
-      container-name: page !important;
-    }
-    img {
-      max-width: 100% !important;
-      width: auto !important;
-      height: auto !important;
-    }
-    ${viewMode === "paginated" ? paginatedImageCss : scrollImageCss}
-    p, p.book-body-p {
-      line-height: 1.75 !important;
-      letter-spacing: 0 !important;
-      word-spacing: normal !important;
       margin: 0 !important;
-      max-width: 100% !important;
-      text-align: left !important;
-      text-indent: 1em !important;
-      word-break: keep-all;
-      overflow-wrap: anywhere !important;
-      text-wrap: pretty;
+      padding: 0 !important;
     }
-    @container page (min-width: 32em) {
-      p, p.book-body-p {
-        text-align: justify !important;
-        text-align-last: left !important;
-        text-justify: inter-word !important;
-      }
+    ${proseSurfaceCss("body", true)}
+    body {
+      margin: 0 auto !important;
     }
-    h1, h2, h3, h4, h5, h6 {
-      text-align: left !important;
-      text-indent: 0 !important;
+    ${proseContainerCss("html", true)}
+    ${proseContentCss("body", true)}
+    body > h1:first-child {
+      margin-top: 0 !important;
     }
-    blockquote, blockquote p {
-      text-align: left !important;
-      text-indent: 0 !important;
-    }
-    h1 + p, h2 + p, h3 + p, hr + p, blockquote + p {
-      text-indent: 0 !important;
-    }
+    ${proseImageCss(viewMode)}
   `;
 }

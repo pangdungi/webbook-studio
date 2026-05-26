@@ -6,6 +6,7 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { BookParagraph } from "./BookParagraph";
+import { bookChapterTitleClass } from "@/lib/typography/bookStyles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import type { SpellCorrection } from "@/lib/types/database";
@@ -18,6 +19,7 @@ import {
 
 type Props = {
   chapterId: string;
+  chapterTitle: string;
   bookId: string;
   initialContent: Record<string, unknown>;
   onContentChange: (
@@ -61,6 +63,7 @@ function ToolbarButton({
 
 export function BookEditor({
   chapterId,
+  chapterTitle,
   bookId,
   initialContent,
   onContentChange,
@@ -330,9 +333,12 @@ export function BookEditor({
         <ToolbarButton onClick={runSpellcheck}>맞춤법 검사</ToolbarButton>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-stone-50 p-6">
-        <div className="book-editor-surface mx-auto min-h-[60vh] max-w-[42rem] rounded-xl bg-white px-10 py-8 shadow-sm">
-          <EditorContent editor={editor} />
+      <div className="flex-1 overflow-y-auto bg-stone-50 p-4 sm:p-6">
+        <div className="book-prose min-h-[60vh] rounded-xl bg-white shadow-sm">
+          <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
+          <div className="book-prose-editor">
+            <EditorContent editor={editor} />
+          </div>
         </div>
       </div>
 

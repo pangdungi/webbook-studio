@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Noto_Serif_KR } from "next/font/google";
+import { bookEditorCss } from "@/lib/typography/bookStyles";
 import "./globals.css";
 
 const notoSerif = Noto_Serif_KR({
@@ -21,6 +22,7 @@ export default function RootLayout({
   return (
     <html lang="ko" className={`${notoSerif.variable} h-full`}>
       <body className="h-full min-h-full bg-stone-50 font-sans antialiased">
+        <style dangerouslySetInnerHTML={{ __html: bookEditorCss() }} />
         {children}
       </body>
     </html>

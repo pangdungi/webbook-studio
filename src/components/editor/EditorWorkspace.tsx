@@ -248,6 +248,7 @@ export function EditorWorkspace({
           <BookEditor
             key={activeChapter.id}
             chapterId={activeChapter.id}
+            chapterTitle={activeChapter.title}
             bookId={bookId}
             initialContent={activeChapter.content_json}
             onContentChange={updateChapterContent}
