@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, NavItem, Rendition } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
-import { injectBookFonts, readerInjectCss, readerThemeStyles } from "@/lib/typography/bookStyles";
+import { injectBookFonts, readerInjectCss } from "@/lib/typography/bookStyles";
 import { schedulePaginatedImageFix, getRenditionColumnWidth } from "@/lib/typography/imageLayout";
 
 export type ReaderViewMode = "scroll" | "paginated";
@@ -242,7 +242,6 @@ export function EpubViewer({
 
       renditionRef.current = rendition;
       onRenditionRef.current?.(rendition);
-      rendition.themes.default(readerThemeStyles);
       rendition.themes.fontSize("100%");
 
       rendition.hooks.content.register((contents: { document: Document }) => {

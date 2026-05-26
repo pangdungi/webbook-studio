@@ -16,6 +16,10 @@ export const BOOK_PROSE_PADDING = "1rem 0.875rem";
 export const bookChapterTitleClass = "book-chapter-title";
 export const chapterOpenerPageClass = "chapter-opener-page";
 export const chapterBodyClass = "chapter-body";
+export const bookProseClass = "book-prose";
+
+/** 편집기 바깥 배경과 동일 */
+export const BOOK_PAGE_BG = "#fafaf9";
 
 /** 장 표지 배경 — 본문(흰색)과 구분 */
 export const CHAPTER_OPENER_BG = "#f5f5f4";
@@ -26,13 +30,12 @@ function chapterOpenerCss(important = false) {
   return `
     .${chapterOpenerPageClass} {
       box-sizing: border-box${i};
-      min-height: 70vh${i};
       display: flex${i};
       flex-direction: column${i};
       align-items: flex-start${i};
       justify-content: flex-start${i};
       text-align: left${i};
-      padding: 3.5rem 1rem 2rem${i};
+      padding: 3rem 0 2rem${i};
       background-color: ${CHAPTER_OPENER_BG}${i};
       page-break-after: always${i};
       break-after: page${i};
@@ -194,23 +197,50 @@ function proseContainerCss(containerSelector: string, important = false) {
   `;
 }
 
-function proseSurfaceCss(surfaceSelector: string, important = false) {
+function bookReaderPageCss(important = false) {
   const i = important ? " !important" : "";
 
   return `
-    ${surfaceSelector} {
-      font-family: ${bookBodyFontFamily}${i};
-      font-size: 100%${i};
-      line-height: 1.75${i};
-      color: #1c1917${i};
+    html {
+      width: 100%${i};
+      max-width: 100%${i};
+      overflow-x: hidden${i};
+    }
+    body {
+      margin: 0${i};
+      padding: 1rem${i};
+      background-color: ${BOOK_PAGE_BG}${i};
+      box-sizing: border-box${i};
+      -webkit-text-size-adjust: 100%${i};
+    }
+    @media (min-width: 640px) {
+      body {
+        padding: 1.5rem${i};
+      }
+    }
+    .${bookProseClass} {
+      container-type: inline-size${i};
+      container-name: page${i};
       max-width: ${BOOK_PROSE_MAX_WIDTH}${i};
       margin-left: auto${i};
       margin-right: auto${i};
       padding: ${BOOK_PROSE_PADDING}${i};
+      background-color: #ffffff${i};
+      font-family: ${bookBodyFontFamily}${i};
+      font-size: 100%${i};
+      line-height: 1.75${i};
+      color: #1c1917${i};
       width: 100%${i};
       box-sizing: border-box${i};
-      -webkit-text-size-adjust: 100%${i};
       overflow-x: hidden${i};
+    }
+    .${bookProseClass} .${chapterOpenerPageClass} {
+      margin: -1rem -0.875rem 0${i};
+    }
+    .${bookProseClass} .${chapterBodyClass} {
+      border-top: 1px solid #e7e5e4${i};
+      padding-top: 1.25rem${i};
+      background-color: #ffffff${i};
     }
   `;
 }
@@ -269,7 +299,7 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
 /** 편집기 — layout.tsx에서 주입 */
 export function bookEditorCss() {
   return `
-    .book-prose {
+    .${bookProseClass} {
       container-type: inline-size;
       container-name: page;
       max-width: ${BOOK_PROSE_MAX_WIDTH};
@@ -282,22 +312,22 @@ export function bookEditorCss() {
       color: #1c1917;
       box-sizing: border-box;
     }
-    .book-prose .ProseMirror {
+    .${bookProseClass} .ProseMirror {
       outline: none;
       min-height: 320px;
     }
     ${chapterOpenerCss()}
-    .book-prose .${chapterOpenerPageClass} {
+    .${bookProseClass} .${chapterOpenerPageClass} {
       margin: -1rem -0.875rem 0;
       border-radius: 0.75rem 0.75rem 0 0;
     }
-    .${chapterBodyClass} {
+    .${bookProseClass} .${chapterBodyClass} {
       border-top: 1px solid #e7e5e4;
       padding-top: 1.25rem;
       background-color: #fff;
     }
-    ${proseContentCss(".book-prose .ProseMirror")}
-    ${proseContainerCss(".book-prose")}
+    ${proseContentCss(`.${bookProseClass} .ProseMirror`)}
+    ${proseContainerCss(`.${bookProseClass}`)}
     .book-prose .ProseMirror p.is-editor-empty:first-child::before {
       color: #a8a29e;
       content: attr(data-placeholder);
@@ -390,17 +420,9 @@ export function epubTypographyCss(writingModeCss: string) {
     ${bookFontFaceCss}
     ${writingModeCss}
     * { box-sizing: border-box; }
-    html {
-      width: 100%;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
-    ${proseSurfaceCss("body")}
-    body {
-      margin: 0;
-    }
-    ${proseContentCss("body")}
-    ${proseContainerCss("html")}
+    ${bookReaderPageCss()}
+    ${proseContentCss(`.${bookProseClass} .${chapterBodyClass}`)}
+    ${proseContainerCss(`.${bookProseClass}`)}
     ${chapterOpenerCss()}
     ${proseImageCss("scroll")}
     .epub-author, .epub-link { display: none; }
@@ -418,20 +440,10 @@ export function readerInjectCss(
 
   return `
     ${modeCss}
-    html {
-      width: 100% !important;
-      max-width: 100% !important;
-      overflow-x: hidden !important;
-      margin: 0 !important;
-      padding: 0 !important;
-    }
-    ${proseSurfaceCss("body", true)}
-    body {
-      margin: 0 auto !important;
-    }
-    ${proseContainerCss("html", true)}
+    ${bookReaderPageCss(true)}
+    ${proseContainerCss(`.${bookProseClass}`, true)}
     ${chapterOpenerCss(true)}
-    ${proseContentCss("body", true)}
+    ${proseContentCss(`.${bookProseClass} .${chapterBodyClass}`, true)}
     ${proseImageCss(viewMode)}
   `;
 }

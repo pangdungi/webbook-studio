@@ -1,5 +1,6 @@
 import {
   bookChapterTitleClass,
+  bookProseClass,
   chapterBodyClass,
   chapterOpenerPageClass,
 } from "@/lib/typography/bookStyles";
@@ -18,5 +19,5 @@ export function buildChapterEpubHtml(title: string, contentHtml: string) {
   const safeTitle = escapeHtml(title.trim() || "제목 없음");
   const body = wrapImagesInHtml(contentHtml?.trim() || "<p></p>");
 
-  return `<section class="${chapterOpenerPageClass}"><h1 class="${bookChapterTitleClass}">${safeTitle}</h1></section><section class="${chapterBodyClass}">${body}</section>`;
+  return `<div class="${bookProseClass}"><section class="${chapterOpenerPageClass}"><h1 class="${bookChapterTitleClass}">${safeTitle}</h1></section><section class="${chapterBodyClass}">${body}</section></div>`;
 }
