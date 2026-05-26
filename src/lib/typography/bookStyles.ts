@@ -1,13 +1,25 @@
+import {
+  bookFontFaceCss,
+  bookSerifFontFamily,
+  headingFontFamily,
+  type BookHeadingFonts,
+  DEFAULT_BOOK_HEADING_FONTS,
+} from "@/lib/typography/headingFonts";
+import {
+  bookPageCanvasCss,
+  bookPageClass,
+  bookPageContentClass,
+  bookPageCoverClass,
+  bookPageEditorShellCss,
+  bookPageReaderCss,
+  bookChapterTitleClass as bookPageChapterTitleClass,
+} from "@/lib/pages/bookPageCss";
 import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
 
-/** 본문 명조 — 편집기·EPUB·리더 공통 (고딕 fallback 제외) */
-export const NOTO_SERIF_KR_GOOGLE_CSS =
-  "https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap";
+/** 본문 명조 — 편집기·EPUB·리더 공통 */
+export const bookBodyFontFamily = bookSerifFontFamily;
 
-export const bookBodyFontFamily =
-  '"Noto Serif KR", "Apple Myungjo", "Batang", serif';
-
-export const bookFontFaceCss = `@import url("${NOTO_SERIF_KR_GOOGLE_CSS}");`;
+export { NOTO_SERIF_KR_GOOGLE_CSS } from "@/lib/typography/headingFonts";
 
 /** 편집기·리더 본문 영역 — 동일 너비·여백 */
 export const BOOK_PROSE_MAX_WIDTH = "42rem";
@@ -15,6 +27,7 @@ export const BOOK_PROSE_PADDING = "1rem 0.875rem";
 
 export const bookChapterTitleClass = "book-chapter-title";
 export const chapterOpenerPageClass = "chapter-opener-page";
+export const chapterOpenerSplashClass = "chapter-opener-splash";
 export const chapterBodyClass = "chapter-body";
 export const bookProseClass = "book-prose";
 
@@ -24,29 +37,35 @@ export const BOOK_PAGE_BG = "#fafaf9";
 /** 장 표지 배경 — 본문(흰색)과 구분 */
 export const CHAPTER_OPENER_BG = "#f5f5f4";
 
+/** 리더·편집기 — iframe 안 vh 대신 JS로 주입 (vh는 긴 iframe에서 무한히 커짐) */
+export const WEBBOOK_PAGE_HEIGHT_VAR = "--webbook-page-h";
+
+export function injectPageHeight(doc: Document, heightPx: number) {
+  const h = Math.max(320, Math.round(heightPx));
+  doc.documentElement.style.setProperty(WEBBOOK_PAGE_HEIGHT_VAR, `${h}px`);
+}
+
+/** 장 표지 — 제목 + 고정 높이 스페이서(한 화면). min-height 대신 splash로 높이 고정 */
 function chapterOpenerCss(important = false) {
   const i = important ? " !important" : "";
 
   return `
     .${chapterOpenerPageClass} {
       box-sizing: border-box${i};
-      display: flex${i};
-      flex-direction: column${i};
-      align-items: flex-start${i};
-      justify-content: flex-start${i};
-      text-align: left${i};
-      padding: 3rem 0 2rem${i};
+      display: block${i};
+      padding: 3rem 0 0${i};
       background-color: ${CHAPTER_OPENER_BG}${i};
-      page-break-after: always${i};
-      break-after: page${i};
-      -webkit-column-break-after: always${i};
+      overflow: hidden${i};
+      min-height: auto${i};
+      height: auto${i};
+      max-height: none${i};
     }
     .${chapterOpenerPageClass} h1.${bookChapterTitleClass} {
       display: inline-block${i};
       box-sizing: border-box${i};
       max-width: 100%${i};
       width: auto${i};
-      margin: 0${i};
+      margin: 0 0 0 0${i};
       padding: 1.1em 1.75em${i};
       border: 2px solid #1c1917${i};
       font-size: 1.55em${i};
@@ -59,21 +78,59 @@ function chapterOpenerCss(important = false) {
       word-break: keep-all${i};
       color: #0c0a09${i};
     }
+    .${chapterOpenerSplashClass} {
+      display: block${i};
+      height: calc(var(${WEBBOOK_PAGE_HEIGHT_VAR}, 640px) - 11rem)${i};
+      max-height: calc(var(${WEBBOOK_PAGE_HEIGHT_VAR}, 640px) - 11rem)${i};
+      pointer-events: none${i};
+      flex-shrink: 0${i};
+    }
     .${chapterBodyClass} {
+      position: relative${i};
+      z-index: 1${i};
       padding-top: 0${i};
       background-color: #ffffff${i};
     }
   `;
 }
 
+/** 페이지 모드 — 장 표지 다음 열(페이지)부터 본문 */
+function chapterOpenerPaginatedCss(important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    .${chapterOpenerPageClass} {
+      break-inside: avoid${i};
+      -webkit-column-break-inside: avoid${i};
+      page-break-inside: avoid${i};
+      break-after: column${i};
+      -webkit-column-break-after: always${i};
+    }
+  `;
+}
+
 /** EPUB iframe — Google Fonts 로드 (부모 페이지 폰트는 상속되지 않음) */
-export function injectBookFonts(doc: Document) {
-  if (doc.getElementById("webbook-reader-fonts")) return;
-  const link = doc.createElement("link");
-  link.id = "webbook-reader-fonts";
-  link.rel = "stylesheet";
-  link.href = NOTO_SERIF_KR_GOOGLE_CSS;
-  doc.head.prepend(link);
+export function injectBookFonts(
+  doc: Document,
+  fonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
+) {
+  const needsSans =
+    fonts.chapterTitle === "sans" ||
+    fonts.heading2 === "sans" ||
+    fonts.heading3 === "sans";
+  const families = needsSans
+    ? "family=Noto+Serif+KR:wght@400;600;700&family=Noto+Sans+KR:wght@400;600;700"
+    : "family=Noto+Serif+KR:wght@400;600;700";
+  const href = `https://fonts.googleapis.com/css2?${families}&display=swap`;
+
+  let link = doc.getElementById("webbook-reader-fonts") as HTMLLinkElement | null;
+  if (!link) {
+    link = doc.createElement("link");
+    link.id = "webbook-reader-fonts";
+    link.rel = "stylesheet";
+    doc.head.prepend(link);
+  }
+  if (link.href !== href) link.href = href;
 }
 
 export const typographyGuide = {
@@ -104,6 +161,7 @@ function proseContentCss(contentRoot: string, important = false) {
 
   return `
     ${r} h1, ${r} h1.${bookChapterTitleClass} {
+      font-family: var(--wbs-font-chapter, ${bookBodyFontFamily})${i};
       font-size: 1.45em${i};
       font-weight: 700${i};
       line-height: 1.4${i};
@@ -114,6 +172,7 @@ function proseContentCss(contentRoot: string, important = false) {
       word-break: keep-all${i};
     }
     ${r} h2 {
+      font-family: var(--wbs-font-h2, ${bookBodyFontFamily})${i};
       font-size: 1.2em${i};
       font-weight: 600${i};
       line-height: 1.45${i};
@@ -124,6 +183,7 @@ function proseContentCss(contentRoot: string, important = false) {
       word-break: keep-all${i};
     }
     ${r} h3 {
+      font-family: var(--wbs-font-h3, ${bookBodyFontFamily})${i};
       font-size: 1.05em${i};
       font-weight: 600${i};
       line-height: 1.5${i};
@@ -197,14 +257,19 @@ function proseContainerCss(containerSelector: string, important = false) {
   `;
 }
 
-function bookReaderPageCss(important = false) {
+function bookReaderPageCss(
+  important = false,
+  viewMode: "scroll" | "paginated" = "scroll",
+) {
   const i = important ? " !important" : "";
+  const paginated = viewMode === "paginated";
+  const overflowX = paginated ? "visible" : "hidden";
 
   return `
     html {
       width: 100%${i};
       max-width: 100%${i};
-      overflow-x: hidden${i};
+      overflow-x: ${overflowX}${i};
     }
     body {
       margin: 0${i};
@@ -212,6 +277,7 @@ function bookReaderPageCss(important = false) {
       background-color: ${BOOK_PAGE_BG}${i};
       box-sizing: border-box${i};
       -webkit-text-size-adjust: 100%${i};
+      overflow-x: ${overflowX}${i};
     }
     @media (min-width: 640px) {
       body {
@@ -232,7 +298,7 @@ function bookReaderPageCss(important = false) {
       color: #1c1917${i};
       width: 100%${i};
       box-sizing: border-box${i};
-      overflow-x: hidden${i};
+      overflow-x: ${overflowX}${i};
     }
     .${bookProseClass} .${chapterOpenerPageClass} {
       margin: -1rem -0.875rem 0${i};
@@ -287,11 +353,8 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
       -webkit-column-break-inside: avoid;
       page-break-inside: avoid;
     }
-    .webbook-img-wrap img {
-      display: inline-block !important;
-      margin: 0 !important;
-    }
     ${columnImageWrapperCss}
+    ${readerImageAlignCss}
   `
     : scrollImageCss;
 }
@@ -299,59 +362,38 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
 /** 편집기 — layout.tsx에서 주입 */
 export function bookEditorCss() {
   return `
-    .${bookProseClass} {
-      container-type: inline-size;
-      container-name: page;
-      max-width: ${BOOK_PROSE_MAX_WIDTH};
-      margin-left: auto;
-      margin-right: auto;
-      padding: ${BOOK_PROSE_PADDING};
-      font-family: ${bookBodyFontFamily};
-      font-size: 100%;
-      line-height: 1.75;
-      color: #1c1917;
-      box-sizing: border-box;
-    }
-    .${bookProseClass} .ProseMirror {
+    ${bookPageCanvasCss()}
+    ${bookPageEditorShellCss()}
+    .book-page-prose .ProseMirror {
       outline: none;
-      min-height: 320px;
+      min-height: 12rem;
     }
-    ${chapterOpenerCss()}
-    .${bookProseClass} .${chapterOpenerPageClass} {
-      margin: -1rem -0.875rem 0;
-      border-radius: 0.75rem 0.75rem 0 0;
-    }
-    .${bookProseClass} .${chapterBodyClass} {
-      border-top: 1px solid #e7e5e4;
-      padding-top: 1.25rem;
-      background-color: #fff;
-    }
-    ${proseContentCss(`.${bookProseClass} .ProseMirror`)}
-    ${proseContainerCss(`.${bookProseClass}`)}
-    .book-prose .ProseMirror p.is-editor-empty:first-child::before {
+    ${proseContentCss(".book-page-prose .ProseMirror")}
+    ${proseContainerCss(".book-page-prose")}
+    .book-page-prose .ProseMirror p.is-editor-empty:first-child::before {
       color: #a8a29e;
       content: attr(data-placeholder);
       float: left;
       height: 0;
       pointer-events: none;
     }
-    .book-prose .ProseMirror img {
+    .book-page-prose .ProseMirror img {
       max-width: 100%;
       height: auto;
       border-radius: 0.5rem;
       margin: 1.25em 0;
     }
-    .book-prose .ProseMirror img[data-align="center"] {
+    .book-page-prose .ProseMirror img[data-align="center"] {
       display: block;
       margin-left: auto;
       margin-right: auto;
     }
-    .book-prose .ProseMirror img[data-align="left"] {
+    .book-page-prose .ProseMirror img[data-align="left"] {
       display: block;
       margin-right: auto;
       margin-left: 0;
     }
-    .book-prose .ProseMirror img[data-align="right"] {
+    .book-page-prose .ProseMirror img[data-align="right"] {
       display: block;
       margin-left: auto;
       margin-right: 0;
@@ -415,35 +457,94 @@ export const readerThemeStyles = {
   },
 };
 
-export function epubTypographyCss(writingModeCss: string) {
+function headingFontsExplicitCss(
+  fonts: BookHeadingFonts,
+  important = false,
+) {
+  const i = important ? " !important" : "";
+
   return `
-    ${bookFontFaceCss}
+    .${bookPageCoverClass} h1.${bookPageChapterTitleClass} {
+      font-family: ${headingFontFamily(fonts.chapterTitle)}${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} h2 {
+      font-family: ${headingFontFamily(fonts.heading2)}${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} h3 {
+      font-family: ${headingFontFamily(fonts.heading3)}${i};
+    }
+  `;
+}
+
+export function epubTypographyCss(
+  writingModeCss: string,
+  headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
+) {
+  const vars = `
+    :root {
+      --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)};
+      --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)};
+      --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)};
+    }
+  `;
+
+  return `
+    ${bookFontFaceCss(headingFonts)}
+    ${vars}
+    ${headingFontsExplicitCss(headingFonts)}
     ${writingModeCss}
     * { box-sizing: border-box; }
-    ${bookReaderPageCss()}
-    ${proseContentCss(`.${bookProseClass} .${chapterBodyClass}`)}
-    ${proseContainerCss(`.${bookProseClass}`)}
-    ${chapterOpenerCss()}
+    ${bookPageReaderCss()}
+    ${proseContentCss(`.${bookPageClass}.${bookPageContentClass}`)}
+    ${proseContainerCss(`.${bookPageClass}`)}
     ${proseImageCss("scroll")}
     .epub-author, .epub-link { display: none; }
+  `;
+}
+
+function readerPaginatedPageCss(important = false) {
+  const i = important ? " !important" : "";
+  return `
+    html, body {
+      overflow-x: visible${i};
+    }
+    .${bookPageClass} {
+      break-inside: avoid${i};
+      -webkit-column-break-inside: avoid${i};
+      page-break-inside: avoid${i};
+      break-after: auto${i};
+      -webkit-column-break-after: auto${i};
+      page-break-after: auto${i};
+    }
   `;
 }
 
 export function readerInjectCss(
   writingMode: "horizontal-tb" | "vertical-rl",
   viewMode: "scroll" | "paginated" = "scroll",
+  headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
 ) {
   const modeCss =
     writingMode === "vertical-rl"
       ? `body { writing-mode: vertical-rl !important; text-orientation: mixed !important; }`
       : "";
 
+  const vars = `
+    :root {
+      --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)} !important;
+      --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)} !important;
+      --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)} !important;
+    }
+  `;
+
   return `
     ${modeCss}
-    ${bookReaderPageCss(true)}
-    ${proseContainerCss(`.${bookProseClass}`, true)}
-    ${chapterOpenerCss(true)}
-    ${proseContentCss(`.${bookProseClass} .${chapterBodyClass}`, true)}
+    ${vars}
+    ${headingFontsExplicitCss(headingFonts, true)}
+    ${bookPageReaderCss(true)}
+    ${viewMode === "paginated" ? readerPaginatedPageCss(true) : ""}
+    ${proseContentCss(`.${bookPageClass}.${bookPageContentClass}`, true)}
+    ${proseContainerCss(`.${bookPageClass}`, true)}
     ${proseImageCss(viewMode)}
   `;
 }

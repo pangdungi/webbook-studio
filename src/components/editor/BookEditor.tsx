@@ -1,16 +1,23 @@
 "use client";
 
-import { ImageAlign, type ImageAlignValue } from "./ImageAlignExtension";
-import Placeholder from "@tiptap/extension-placeholder";
-import Underline from "@tiptap/extension-underline";
-import { EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
-import { BookParagraph } from "./BookParagraph";
+import { PageTipTapEditor } from "./PageTipTapEditor";
+import type { ImageAlignValue } from "./ImageAlignExtension";
 import {
   bookChapterTitleClass,
-  chapterBodyClass,
-  chapterOpenerPageClass,
-} from "@/lib/typography/bookStyles";
+  bookPageBodyClass,
+  bookPageClass,
+  bookPageContentClass,
+  bookPageCoverClass,
+  bookPageShellClass,
+  syncBookPageMetrics,
+} from "@/lib/pages/bookPageCss";
+import {
+  chapterContentToJson,
+  chapterPagesToStorageHtml,
+  createPage,
+  parseChapterContent,
+} from "@/lib/pages/content";
+import type { BookPage } from "@/lib/pages/types";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import type { SpellCorrection } from "@/lib/types/database";
@@ -20,12 +27,14 @@ import {
   getEditorPlainText,
   shiftCorrectionsAfterApply,
 } from "@/lib/spellcheck/applyToEditor";
+import type { Editor } from "@tiptap/react";
 
 type Props = {
   chapterId: string;
   chapterTitle: string;
   bookId: string;
   initialContent: Record<string, unknown>;
+  initialContentHtml?: string;
   onContentChange: (
     chapterId: string,
     contentJson: Record<string, unknown>,
@@ -70,17 +79,29 @@ export function BookEditor({
   chapterTitle,
   bookId,
   initialContent,
+  initialContentHtml = "",
   onContentChange,
   onSave,
 }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterIdRef = useRef(chapterId);
-  const editorRef = useRef<ReturnType<typeof useEditor>>(null);
   const onSaveRef = useRef(onSave);
   const onContentChangeRef = useRef(onContentChange);
+  const editorsRef = useRef<Map<string, Editor | null>>(new Map());
+  const shellRef = useRef<HTMLDivElement>(null);
+
   chapterIdRef.current = chapterId;
   onSaveRef.current = onSave;
   onContentChangeRef.current = onContentChange;
+
+  const [pages, setPages] = useState<BookPage[]>(() =>
+    parseChapterContent(initialContent, chapterTitle, initialContentHtml).pages,
+  );
+  const [activePageId, setActivePageId] = useState(
+    () => pages.find((p) => p.kind === "content")?.id ?? pages[0]?.id ?? "",
+  );
+  const [, setToolbarTick] = useState(0);
+
   const [spellOpen, setSpellOpen] = useState(false);
   const [spellLoading, setSpellLoading] = useState(false);
   const [corrections, setCorrections] = useState<SpellCorrection[]>([]);
@@ -90,69 +111,115 @@ export function BookEditor({
   const [spellError, setSpellError] = useState<string | null>(null);
   const [spellProvider, setSpellProvider] = useState<string | null>(null);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ paragraph: false }),
-      BookParagraph,
-      Underline,
-      ImageAlign.configure({ inline: false }),
-      Placeholder.configure({
-        placeholder: "장 제목 다음 페이지부터 본문을 작성하세요. 중제목·소제목으로 구분할 수 있습니다.",
-      }),
-    ],
-    content: initialContent,
-    immediatelyRender: false,
-    /** #, >, --- 등 마크다운 단축키 비활성 — 툴바로만 서식 적용 */
-    enableInputRules: false,
-    onUpdate: ({ editor: ed }) => {
-      const json = ed.getJSON() as Record<string, unknown>;
-      const html = ed.getHTML();
-      onContentChange(chapterIdRef.current, json, html);
+  const activeEditor = editorsRef.current.get(activePageId) ?? null;
 
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        onSave(chapterIdRef.current, json, html);
-      }, 800);
+  const persist = useCallback((nextPages: BookPage[]) => {
+    const json = chapterContentToJson(nextPages) as unknown as Record<
+      string,
+      unknown
+    >;
+    const html = chapterPagesToStorageHtml(nextPages);
+    onContentChangeRef.current(chapterIdRef.current, json, html);
+
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      onSaveRef.current(chapterIdRef.current, json, html);
+    }, 800);
+  }, []);
+
+  const handlePageUpdate = useCallback(
+    (pageId: string, json: Record<string, unknown>, html: string) => {
+      setPages((prev) => {
+        const next = prev.map((p) =>
+          p.id === pageId ? { ...p, content: json, content_html: html } : p,
+        );
+        queueMicrotask(() => persist(next));
+        return next;
+      });
     },
-  });
+    [persist],
+  );
 
-  editorRef.current = editor;
-
-  const [, setSelectionTick] = useState(0);
-  useEffect(() => {
-    if (!editor) return;
-    const bump = () => setSelectionTick((n) => n + 1);
-    editor.on("selectionUpdate", bump);
-    editor.on("transaction", bump);
-    return () => {
-      editor.off("selectionUpdate", bump);
-      editor.off("transaction", bump);
-    };
-  }, [editor]);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimer.current) {
-        clearTimeout(saveTimer.current);
-        saveTimer.current = null;
+  const registerEditor = useCallback(
+    (pageId: string, editor: Editor | null) => {
+      editorsRef.current.set(pageId, editor);
+      if (editor) {
+        const bump = () => setToolbarTick((n) => n + 1);
+        editor.on("selectionUpdate", bump);
+        editor.on("transaction", bump);
       }
-      const ed = editorRef.current;
-      if (ed && !ed.isDestroyed) {
-        const json = ed.getJSON() as Record<string, unknown>;
-        const html = ed.getHTML();
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+
+    const sync = () => syncBookPageMetrics(shell);
+
+    sync();
+    const ro = new ResizeObserver(sync);
+    ro.observe(shell);
+    return () => ro.disconnect();
+  }, [pages.length]);
+
+  const pagesRef = useRef(pages);
+  pagesRef.current = pages;
+
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      const snapshot = pagesRef.current;
+      if (snapshot.length > 0) {
+        const json = chapterContentToJson(snapshot) as unknown as Record<
+          string,
+          unknown
+        >;
+        const html = chapterPagesToStorageHtml(snapshot);
         onContentChangeRef.current(chapterIdRef.current, json, html);
         onSaveRef.current(chapterIdRef.current, json, html);
       }
     };
   }, []);
 
+  const addPage = () => {
+    const page = createPage("content");
+    setPages((prev) => {
+      const next = [...prev, page];
+      persist(next);
+      return next;
+    });
+    setActivePageId(page.id);
+  };
+
+  const deletePage = (pageId: string) => {
+    const contentPages = pages.filter((p) => p.kind === "content");
+    if (contentPages.length <= 1) return;
+
+    setPages((prev) => {
+      const next = prev.filter((p) => p.id !== pageId);
+      persist(next);
+      return next;
+    });
+    if (activePageId === pageId) {
+      const remaining = pages.filter(
+        (p) => p.id !== pageId && p.kind === "content",
+      );
+      setActivePageId(remaining[0]?.id ?? pages[0]?.id ?? "");
+    }
+  };
+
   const uploadImage = useCallback(async () => {
+    const editor = activeEditor;
+    if (!editor) return;
+
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
     input.onchange = async () => {
       const file = input.files?.[0];
-      if (!file || !editor) return;
+      if (!file) return;
 
       const formData = new FormData();
       formData.append("file", file);
@@ -173,9 +240,10 @@ export function BookEditor({
       }
     };
     input.click();
-  }, [bookId, editor]);
+  }, [activeEditor, bookId]);
 
   const runSpellcheck = useCallback(async () => {
+    const editor = activeEditor;
     if (!editor) return;
     const text = getEditorPlainText(editor);
     setOriginalText(text);
@@ -211,9 +279,10 @@ export function BookEditor({
     } finally {
       setSpellLoading(false);
     }
-  }, [editor]);
+  }, [activeEditor]);
 
   const applyAllCorrections = useCallback(() => {
+    const editor = activeEditor;
     if (!editor || !correctedText) return;
     const ok = applyCorrectedPlainTextToEditor(editor, correctedText);
     if (!ok) {
@@ -223,10 +292,11 @@ export function BookEditor({
     setSpellOpen(false);
     setCorrections([]);
     setCorrectedText("");
-  }, [editor, correctedText]);
+  }, [activeEditor, correctedText]);
 
   const applyOneCorrection = useCallback(
     (correction: SpellCorrection) => {
+      const editor = activeEditor;
       if (!editor) return;
       const ok = applyOneCorrectionToEditor(editor, correction);
       if (!ok) {
@@ -235,59 +305,64 @@ export function BookEditor({
       }
       setCorrections((prev) => shiftCorrectionsAfterApply(prev, correction));
     },
-    [editor],
+    [activeEditor],
   );
 
-  if (!editor) return null;
-
-  const imageSelected = editor.isActive("image");
+  const imageSelected = activeEditor?.isActive("image") ?? false;
   const imageAlign =
-    (editor.getAttributes("image").align as ImageAlignValue | undefined) ??
+    (activeEditor?.getAttributes("image").align as ImageAlignValue | undefined) ??
     "center";
 
   const setImageAlign = (align: ImageAlignValue) => {
-    editor.chain().focus().updateAttributes("image", { align }).run();
+    activeEditor?.chain().focus().updateAttributes("image", { align }).run();
   };
+
+  const contentPageIndex = (id: string) =>
+    pages.filter((p) => p.kind === "content").findIndex((p) => p.id === id);
 
   return (
     <div className="relative flex flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-white px-4 py-2">
         <ToolbarButton
-          active={editor.isActive("heading", { level: 2 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+          active={activeEditor?.isActive("heading", { level: 2 })}
+          onClick={() =>
+            activeEditor?.chain().focus().toggleHeading({ level: 2 }).run()
+          }
           title="중제목"
         >
           중제목
         </ToolbarButton>
         <ToolbarButton
-          active={editor.isActive("heading", { level: 3 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          active={activeEditor?.isActive("heading", { level: 3 })}
+          onClick={() =>
+            activeEditor?.chain().focus().toggleHeading({ level: 3 }).run()
+          }
           title="소제목"
         >
           소제목
         </ToolbarButton>
         <ToolbarButton
-          active={editor.isActive("paragraph")}
-          onClick={() => editor.chain().focus().setParagraph().run()}
+          active={activeEditor?.isActive("paragraph")}
+          onClick={() => activeEditor?.chain().focus().setParagraph().run()}
           title="본문"
         >
           본문
         </ToolbarButton>
         <ToolbarButton
-          active={editor.isActive("bold")}
-          onClick={() => editor.chain().focus().toggleBold().run()}
+          active={activeEditor?.isActive("bold")}
+          onClick={() => activeEditor?.chain().focus().toggleBold().run()}
         >
           B
         </ToolbarButton>
         <ToolbarButton
-          active={editor.isActive("italic")}
-          onClick={() => editor.chain().focus().toggleItalic().run()}
+          active={activeEditor?.isActive("italic")}
+          onClick={() => activeEditor?.chain().focus().toggleItalic().run()}
         >
           I
         </ToolbarButton>
         <ToolbarButton
-          active={editor.isActive("underline")}
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
+          active={activeEditor?.isActive("underline")}
+          onClick={() => activeEditor?.chain().focus().toggleUnderline().run()}
         >
           U
         </ToolbarButton>
@@ -298,33 +373,30 @@ export function BookEditor({
             <ToolbarButton
               active={imageAlign === "left"}
               onClick={() => setImageAlign("left")}
-              title="이미지 왼쪽"
             >
               ◧
             </ToolbarButton>
             <ToolbarButton
               active={imageAlign === "center"}
               onClick={() => setImageAlign("center")}
-              title="이미지 가운데"
             >
               ▣
             </ToolbarButton>
             <ToolbarButton
               active={imageAlign === "right"}
               onClick={() => setImageAlign("right")}
-              title="이미지 오른쪽"
             >
               ◨
             </ToolbarButton>
           </>
         )}
         <ToolbarButton
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
+          onClick={() => activeEditor?.chain().focus().toggleBlockquote().run()}
         >
           인용
         </ToolbarButton>
         <ToolbarButton
-          onClick={() => editor.chain().focus().setHorizontalRule().run()}
+          onClick={() => activeEditor?.chain().focus().setHorizontalRule().run()}
         >
           구분선
         </ToolbarButton>
@@ -332,14 +404,75 @@ export function BookEditor({
         <ToolbarButton onClick={runSpellcheck}>맞춤법 검사</ToolbarButton>
       </div>
 
-      <div className="flex-1 overflow-y-auto bg-stone-50 p-4 sm:p-6">
-        <div className="book-prose min-h-[60vh] rounded-xl bg-white shadow-sm">
-          <section className={chapterOpenerPageClass} aria-label="장 표지">
-            <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
-          </section>
-          <section className={`${chapterBodyClass} book-prose-editor`}>
-            <EditorContent editor={editor} />
-          </section>
+      <div className="flex items-center gap-2 border-b border-stone-100 bg-stone-50 px-4 py-2 text-xs text-stone-600">
+        <span className="font-medium text-stone-800">페이지</span>
+        {pages.map((page) => (
+          <button
+            key={page.id}
+            type="button"
+            onClick={() => setActivePageId(page.id)}
+            className={`rounded px-2 py-1 ${
+              activePageId === page.id
+                ? "bg-stone-900 text-white"
+                : "bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100"
+            }`}
+          >
+            {page.kind === "chapter-cover"
+              ? "표지"
+              : contentPageIndex(page.id) + 1}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={addPage}
+          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
+        >
+          + 페이지
+        </button>
+        {pages.find((p) => p.id === activePageId)?.kind === "content" &&
+          pages.filter((p) => p.kind === "content").length > 1 && (
+            <button
+              type="button"
+              onClick={() => deletePage(activePageId)}
+              className="ml-auto text-red-600 hover:underline"
+            >
+              페이지 삭제
+            </button>
+          )}
+      </div>
+
+      <div className="book-page-editor-scroll flex-1 overflow-y-auto">
+        <div ref={shellRef} className={bookPageShellClass}>
+          {pages.map((page) =>
+            page.kind === "chapter-cover" ? (
+              <article
+                key={page.id}
+                className={`${bookPageClass} ${bookPageCoverClass}`}
+                onClick={() => setActivePageId(page.id)}
+                aria-label="장 표지"
+              >
+                <div className={bookPageBodyClass}>
+                  <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
+                </div>
+              </article>
+            ) : (
+              <article
+                key={page.id}
+                className={`${bookPageClass} ${bookPageContentClass}`}
+                onClick={() => setActivePageId(page.id)}
+              >
+                <div className={bookPageBodyClass}>
+                  <PageTipTapEditor
+                    pageId={page.id}
+                    initialContent={page.content}
+                    onUpdate={handlePageUpdate}
+                    onFocus={setActivePageId}
+                    registerEditor={registerEditor}
+                  />
+                </div>
+              </article>
+            ),
+          )}
         </div>
       </div>
 

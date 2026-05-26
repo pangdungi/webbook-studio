@@ -3,6 +3,11 @@
 import { useEffect, useState } from "react";
 import { WebBookReader } from "@/components/reader/WebBookReader";
 import type { WritingMode } from "@/lib/types/database";
+import {
+  DEFAULT_BOOK_HEADING_FONTS,
+  normalizeBookHeadingFonts,
+  type BookHeadingFonts,
+} from "@/lib/typography/headingFonts";
 
 type Props = {
   token: string;
@@ -14,6 +19,9 @@ export function ReaderPageClient({ token }: Props) {
   const [epubUrl, setEpubUrl] = useState("");
   const [title, setTitle] = useState("");
   const [writingMode, setWritingMode] = useState<WritingMode>("horizontal-tb");
+  const [headingFonts, setHeadingFonts] = useState<BookHeadingFonts>(
+    DEFAULT_BOOK_HEADING_FONTS,
+  );
 
   useEffect(() => {
     fetch(`/api/read/${token}`)
@@ -25,6 +33,7 @@ export function ReaderPageClient({ token }: Props) {
           setEpubUrl(data.epubUrl);
           setTitle(data.title);
           setWritingMode(data.writingMode);
+          setHeadingFonts(normalizeBookHeadingFonts(data.headingFonts));
         }
         setLoading(false);
       })
@@ -57,6 +66,7 @@ export function ReaderPageClient({ token }: Props) {
         epubUrl={epubUrl}
         title={title}
         writingMode={writingMode}
+        headingFonts={headingFonts}
       />
     </div>
   );

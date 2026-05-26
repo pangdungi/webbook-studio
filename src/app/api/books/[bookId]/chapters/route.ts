@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  chapterContentToJson,
+  chapterPagesToStorageHtml,
+  createDefaultChapterContent,
+} from "@/lib/pages/content";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -58,9 +63,17 @@ export async function POST(request: Request, context: RouteContext) {
   const title =
     typeof body.title === "string" ? body.title : `${nextOrder + 1}장`;
 
+  const defaultContent = createDefaultChapterContent();
+
   const { data, error } = await supabase
     .from("chapters")
-    .insert({ book_id: bookId, title, sort_order: nextOrder })
+    .insert({
+      book_id: bookId,
+      title,
+      sort_order: nextOrder,
+      content_json: chapterContentToJson(defaultContent.pages),
+      content_html: chapterPagesToStorageHtml(defaultContent.pages),
+    })
     .select()
     .single();
 

@@ -1,3 +1,5 @@
+import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
+
 export type UserRole = "admin" | "reader";
 export type BookStatus = "draft" | "published";
 export type WritingMode = "horizontal-tb" | "vertical-rl";
@@ -15,6 +17,7 @@ export type Book = {
   subtitle: string | null;
   cover_path: string | null;
   writing_mode: WritingMode;
+  heading_fonts: BookHeadingFonts;
   status: BookStatus;
   epub_storage_path: string | null;
   published_at: string | null;

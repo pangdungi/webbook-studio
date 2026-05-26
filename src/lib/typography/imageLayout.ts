@@ -1,16 +1,7 @@
 import type { ImageAlignValue } from "@/components/editor/ImageAlignExtension";
 
-/** 페이지(열) 모드 — margin:auto / width:100%는 전체 가로 열 기준이라 오른쪽으로 쏠림 */
+/** 페이지(열) 모드 — wrapper 안에서 text-align으로 정렬 */
 export const columnImageWrapperCss = `
-  img[data-align="center"],
-  img[data-align="left"],
-  img[data-align="right"],
-  img {
-    margin: 0 !important;
-    margin-left: 0 !important;
-    margin-right: 0 !important;
-    float: none !important;
-  }
   .webbook-img-wrap {
     box-sizing: border-box !important;
     break-inside: avoid !important;
@@ -38,14 +29,33 @@ export function imageAlignFromElement(img: Element): ImageAlignValue {
   return "center";
 }
 
-export function columnContentWidth(doc: Document, columnWidth: number): number {
-  const body = doc.body;
+export function columnContentWidth(doc: Document, columnWidth?: number): number {
   const view = doc.defaultView;
-  if (!view) return columnWidth;
+  if (!view) return columnWidth ?? 0;
+
+  const page = doc.querySelector(".book-page");
+  if (page instanceof HTMLElement && page.clientWidth > 0) {
+    const cs = view.getComputedStyle(page);
+    const pad =
+      parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    return Math.max(0, Math.round(page.clientWidth - pad));
+  }
+
+  const prose = doc.querySelector(".book-prose");
+  if (prose instanceof HTMLElement && prose.clientWidth > 0) {
+    const cs = view.getComputedStyle(prose);
+    const pad =
+      parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+    return Math.max(0, Math.round(prose.clientWidth - pad));
+  }
+
+  const body = doc.body;
   const cs = view.getComputedStyle(body);
   const pad =
     parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
-  return Math.max(0, Math.round(columnWidth - pad));
+  const base =
+    columnWidth && columnWidth > 0 ? columnWidth : body.clientWidth;
+  return Math.max(0, Math.round(base - pad));
 }
 
 function applyWrapStyles(
@@ -89,10 +99,8 @@ export function wrapImagesForColumnLayout(
 ): void {
   const doc = root instanceof Document ? root : root.ownerDocument;
   if (!doc) return;
-  const contentWidth =
-    columnWidth && columnWidth > 0
-      ? columnContentWidth(doc, columnWidth)
-      : undefined;
+  const measuredWidth = columnContentWidth(doc, columnWidth);
+  const contentWidth = measuredWidth > 0 ? measuredWidth : undefined;
 
   root.querySelectorAll("img").forEach((node) => {
     const img = node as HTMLImageElement;

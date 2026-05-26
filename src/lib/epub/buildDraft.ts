@@ -3,7 +3,7 @@ import type { Book, Chapter } from "@/lib/types/database";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type DraftEpubResult =
-  | { ok: true; book: Book; chapters: Pick<Chapter, "title" | "content_html">[]; buffer: Buffer }
+  | { ok: true; book: Book; chapters: Pick<Chapter, "title" | "content_json" | "content_html">[]; buffer: Buffer }
   | { ok: false; error: string; status: number };
 
 /** DB에 저장된 최신 내용으로 EPUB 생성 (출판 여부와 무관) */
@@ -27,7 +27,7 @@ export async function buildDraftEpubBuffer(
 
   const { data: chapters, error: chaptersError } = await supabase
     .from("chapters")
-    .select("title, content_html")
+    .select("title, content_json, content_html")
     .eq("book_id", bookId)
     .order("sort_order", { ascending: true });
 

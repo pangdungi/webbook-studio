@@ -6,6 +6,13 @@ import { BookEditor } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
 import type { Book, Chapter } from "@/lib/types/database";
+import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
+import {
+  HEADING_FONT_OPTIONS,
+  headingFontCssVariables,
+  normalizeBookHeadingFonts,
+  type HeadingFontRole,
+} from "@/lib/typography/headingFonts";
 
 type Props = {
   bookId: string;
@@ -19,7 +26,10 @@ export function EditorWorkspace({
   initialChapters,
 }: Props) {
   const router = useRouter();
-  const [book, setBook] = useState(initialBook);
+  const [book, setBook] = useState(() => ({
+    ...initialBook,
+    heading_fonts: normalizeBookHeadingFonts(initialBook.heading_fonts),
+  }));
   const [chapters, setChapters] = useState(initialChapters);
   const [activeChapterId, setActiveChapterId] = useState(
     initialChapters[0]?.id ?? "",
@@ -130,6 +140,19 @@ export function EditorWorkspace({
     });
   };
 
+  const updateHeadingFont = async (
+    key: keyof BookHeadingFonts,
+    value: HeadingFontRole,
+  ) => {
+    const heading_fonts = { ...book.heading_fonts, [key]: value };
+    setBook((b) => ({ ...b, heading_fonts }));
+    await fetch(`/api/books/${bookId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ heading_fonts }),
+    });
+  };
+
   const publish = async () => {
     setPublishing(true);
     setMessage("");
@@ -143,7 +166,9 @@ export function EditorWorkspace({
     }
 
     setBook(data.book);
-    setMessage(`출판 완료! 독자 링크: ${data.readerUrl}`);
+    setMessage(
+      `출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl}`,
+    );
   };
 
   useEffect(() => {
@@ -177,6 +202,63 @@ export function EditorWorkspace({
           <option value="horizontal-tb">가로쓰기</option>
           <option value="vertical-rl">세로쓰기</option>
         </select>
+        <div
+          className="hidden items-center gap-2 rounded-lg border border-stone-200 px-2 py-1 text-xs text-stone-600 lg:flex"
+          title="책 전체에 동일 적용 — 장·중·소제목만 변경, 본문은 명조"
+        >
+          <span className="shrink-0 text-stone-400">서체</span>
+          <label className="flex items-center gap-1">
+            <span>장</span>
+            <select
+              value={book.heading_fonts.chapterTitle}
+              onChange={(e) =>
+                updateHeadingFont(
+                  "chapterTitle",
+                  e.target.value as HeadingFontRole,
+                )
+              }
+              className="rounded border border-stone-200 bg-white px-1 py-0.5"
+            >
+              {HEADING_FONT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <span>중</span>
+            <select
+              value={book.heading_fonts.heading2}
+              onChange={(e) =>
+                updateHeadingFont("heading2", e.target.value as HeadingFontRole)
+              }
+              className="rounded border border-stone-200 bg-white px-1 py-0.5"
+            >
+              {HEADING_FONT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex items-center gap-1">
+            <span>소</span>
+            <select
+              value={book.heading_fonts.heading3}
+              onChange={(e) =>
+                updateHeadingFont("heading3", e.target.value as HeadingFontRole)
+              }
+              className="rounded border border-stone-200 bg-white px-1 py-0.5"
+            >
+              {HEADING_FONT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <span
           className={`rounded-full px-2 py-0.5 text-xs font-medium ${
             book.status === "published"
@@ -221,7 +303,10 @@ export function EditorWorkspace({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1">
+      <div
+        className="flex min-h-0 flex-1"
+        style={headingFontCssVariables(book.heading_fonts)}
+      >
         <ChapterSidebar
           chapters={chapters}
           activeId={activeChapterId}
@@ -238,6 +323,7 @@ export function EditorWorkspace({
             chapterTitle={activeChapter.title}
             bookId={bookId}
             initialContent={activeChapter.content_json}
+            initialContentHtml={activeChapter.content_html}
             onContentChange={updateChapterContent}
             onSave={saveChapter}
           />

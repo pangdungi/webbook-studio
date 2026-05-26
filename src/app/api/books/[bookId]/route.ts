@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
@@ -49,6 +50,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (typeof body.writing_mode === "string")
     updates.writing_mode = body.writing_mode;
   if (typeof body.cover_path === "string") updates.cover_path = body.cover_path;
+  if (body.heading_fonts && typeof body.heading_fonts === "object") {
+    updates.heading_fonts = normalizeBookHeadingFonts(body.heading_fonts);
+  }
 
   const { data, error } = await supabase
     .from("books")

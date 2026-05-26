@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { validateReaderToken } from "@/lib/access/validate";
+import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
@@ -25,6 +26,7 @@ export async function GET(_request: Request, context: RouteContext) {
   return NextResponse.json({
     title: book.title,
     writingMode: book.writing_mode,
+    headingFonts: normalizeBookHeadingFonts(book.heading_fonts),
     epubUrl: `/api/read/${token}/epub`,
   });
 }

@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Book, NavItem, Rendition } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
+import {
+  DEFAULT_BOOK_HEADING_FONTS,
+  normalizeBookHeadingFonts,
+  type BookHeadingFonts,
+} from "@/lib/typography/headingFonts";
 import { injectBookFonts, readerInjectCss } from "@/lib/typography/bookStyles";
+import { syncBookPageMetrics, bookPageShellClass } from "@/lib/pages/bookPageCss";
 import { schedulePaginatedImageFix, getRenditionColumnWidth } from "@/lib/typography/imageLayout";
 
 export type ReaderViewMode = "scroll" | "paginated";
@@ -12,6 +18,7 @@ type Props = {
   data: ArrayBuffer;
   viewMode: ReaderViewMode;
   writingMode: WritingMode;
+  headingFonts?: BookHeadingFonts;
   onLocationChange?: (cfi: string) => void;
   onTocReady?: (toc: NavItem[]) => void;
   onRendition?: (rendition: Rendition) => void;
@@ -91,6 +98,7 @@ export function EpubViewer({
   data,
   viewMode,
   writingMode,
+  headingFonts = DEFAULT_BOOK_HEADING_FONTS,
   onLocationChange,
   onTocReady,
   onRendition,
@@ -100,11 +108,13 @@ export function EpubViewer({
   const renditionRef = useRef<Rendition | null>(null);
   const savedCfiRef = useRef<string | null>(null);
   const viewModeRef = useRef(viewMode);
+  const headingFontsRef = useRef(headingFonts);
   const readyRef = useRef(false);
   const onLocationChangeRef = useRef(onLocationChange);
   const onTocReadyRef = useRef(onTocReady);
   const onRenditionRef = useRef(onRendition);
   viewModeRef.current = viewMode;
+  headingFontsRef.current = normalizeBookHeadingFonts(headingFonts);
   onLocationChangeRef.current = onLocationChange;
   onTocReadyRef.current = onTocReady;
   onRenditionRef.current = onRendition;
@@ -132,14 +142,19 @@ export function EpubViewer({
     }
   }, []);
 
-  /** data/viewMode 바뀔 때 마운트 세션 리셋 */
+  const syncPageMetrics = useCallback((doc: Document | null | undefined) => {
+    if (!doc) return;
+    doc.querySelectorAll<HTMLElement>(`.${bookPageShellClass}`).forEach(syncBookPageMetrics);
+  }, []);
+
+  /** data/viewMode/headingFonts 바뀔 때 마운트 세션 리셋 */
   useEffect(() => {
     readyRef.current = false;
     setReady(false);
     setMountSize(null);
     measuredSizeRef.current = null;
     setMountSession((s) => s + 1);
-  }, [data, viewMode]);
+  }, [data, viewMode, headingFonts]);
 
   /** 레이아웃 안정 후 크기 확정 (모바일 주소창·EPUB fetch 직후 높이 변동 대응) */
   useEffect(() => {
@@ -237,6 +252,7 @@ export function EpubViewer({
         height,
         flow,
         manager,
+        spread: "none",
         allowScriptedContent: false,
       });
 
@@ -246,15 +262,19 @@ export function EpubViewer({
 
       rendition.hooks.content.register((contents: { document: Document }) => {
         const doc = contents.document;
-        injectBookFonts(doc);
+        const fonts = headingFontsRef.current;
+        injectBookFonts(doc, fonts);
+        syncPageMetrics(doc);
+        let style = doc.getElementById("webbook-reader-styles");
+        if (!style) {
+          style = doc.createElement("style");
+          style.id = "webbook-reader-styles";
+          doc.head.appendChild(style);
+        }
+        style.textContent = readerInjectCss(writingMode, viewMode, fonts);
         if (viewMode === "paginated") {
           schedulePaginatedImageFix(doc, getRenditionColumnWidth(rendition));
         }
-        if (doc.getElementById("webbook-reader-styles")) return;
-        const style = doc.createElement("style");
-        style.id = "webbook-reader-styles";
-        style.textContent = readerInjectCss(writingMode, viewMode);
-        doc.head.appendChild(style);
       });
 
       rendition.on("relocated", (location: { start: { cfi: string } }) => {
@@ -273,9 +293,10 @@ export function EpubViewer({
 
       rendition.on("rendered", (_section: unknown, view: unknown) => {
         applyModeStyles();
+        const doc = (view as { contents?: { document?: Document } })?.contents
+          ?.document;
+        syncPageMetrics(doc);
         if (viewMode === "paginated") {
-          const doc = (view as { contents?: { document?: Document } })?.contents
-            ?.document;
           schedulePaginatedImageFix(doc, getRenditionColumnWidth(rendition));
         }
         if (viewMode === "scroll" && containerRef.current) {
@@ -327,7 +348,7 @@ export function EpubViewer({
       renditionRef.current = null;
       bookRef.current = null;
     };
-  }, [data, viewMode, writingMode, mountSize, mountSession, fitToContainer]);
+  }, [data, viewMode, writingMode, mountSize, mountSession, fitToContainer, syncPageMetrics]);
 
   useEffect(() => {
     if (!ready) return;
@@ -336,6 +357,13 @@ export function EpubViewer({
 
     const onResize = () => {
       fitToContainer();
+      if (renditionRef.current && containerRef.current) {
+        containerRef.current
+          .querySelectorAll<HTMLIFrameElement>(".epub-view iframe")
+          .forEach((iframe) => {
+            syncPageMetrics(iframe.contentDocument ?? undefined);
+          });
+      }
       if (viewMode === "paginated" && renditionRef.current) {
         const iframe = node.querySelector<HTMLIFrameElement>(".epub-view iframe");
         const doc = iframe?.contentDocument;
@@ -354,7 +382,7 @@ export function EpubViewer({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
     };
-  }, [ready, fitToContainer, viewMode]);
+  }, [ready, fitToContainer, viewMode, syncPageMetrics]);
 
   return (
     <div className="relative h-full min-h-0 w-full">

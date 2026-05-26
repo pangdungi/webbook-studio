@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { buildEpubBuffer } from "@/lib/epub/builder";
-import { buildReaderUrl, generateAccessToken } from "@/lib/utils/tokens";
+import { buildReaderUrl } from "@/lib/utils/tokens";
+import { ensurePrimaryReaderToken } from "@/lib/access/bookToken";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
@@ -29,7 +31,7 @@ export async function POST(_request: Request, context: RouteContext) {
 
   const { data: chapters, error: chaptersError } = await supabase
     .from("chapters")
-    .select("title, content_html")
+    .select("title, content_json, content_html")
     .eq("book_id", bookId)
     .order("sort_order", { ascending: true });
 
@@ -48,8 +50,15 @@ export async function POST(_request: Request, context: RouteContext) {
     coverUrl = signed?.signedUrl ?? null;
   }
 
-  const epubBuffer = await buildEpubBuffer(book, chapters, coverUrl);
-  const epubPath = `${bookId}/${Date.now()}.epub`;
+  const epubBuffer = await buildEpubBuffer(
+    {
+      ...book,
+      heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+    },
+    chapters,
+    coverUrl,
+  );
+  const epubPath = `${bookId}/book.epub`;
 
   const { error: uploadError } = await service.storage
     .from("book-epubs")
@@ -77,28 +86,11 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: updateError.message }, { status: 500 });
   }
 
-  const { data: existingToken } = await supabase
-    .from("book_access_tokens")
-    .select("*")
-    .eq("book_id", bookId)
-    .is("revoked_at", null)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  let token = existingToken?.token;
-  if (!token) {
-    token = generateAccessToken();
-    await supabase.from("book_access_tokens").insert({
-      book_id: bookId,
-      token,
-      label: "general",
-    });
-  }
+  const primaryToken = await ensurePrimaryReaderToken(supabase, bookId);
 
   return NextResponse.json({
     book: updatedBook,
-    readerUrl: buildReaderUrl(token),
-    token,
+    readerUrl: buildReaderUrl(primaryToken.token),
+    token: primaryToken.token,
   });
 }

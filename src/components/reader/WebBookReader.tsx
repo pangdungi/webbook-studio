@@ -4,6 +4,8 @@ import dynamic from "next/dynamic";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { NavItem, Rendition } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
+import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
+import { DEFAULT_BOOK_HEADING_FONTS } from "@/lib/typography/headingFonts";
 import { useEpubBlobUrl } from "@/components/reader/useEpubBlobUrl";
 import { useReaderSwipe } from "@/components/reader/useReaderSwipe";
 import type { ReaderViewMode } from "@/components/reader/EpubViewer";
@@ -17,10 +19,17 @@ type Props = {
   epubUrl: string;
   title: string;
   writingMode: WritingMode;
+  headingFonts?: BookHeadingFonts;
   embedded?: boolean;
 };
 
-export function WebBookReader({ epubUrl, title, writingMode, embedded = false }: Props) {
+export function WebBookReader({
+  epubUrl,
+  title,
+  writingMode,
+  headingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  embedded = false,
+}: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
   const [tocOpen, setTocOpen] = useState(false);
   const [toc, setToc] = useState<NavItem[]>([]);
@@ -153,6 +162,7 @@ export function WebBookReader({ epubUrl, title, writingMode, embedded = false }:
               data={epubData}
               viewMode={viewMode}
               writingMode={writingMode}
+              headingFonts={headingFonts}
               onTocReady={handleTocReady}
             />
           )}
@@ -189,9 +199,13 @@ const EpubViewerWithNav = forwardRef<
     data: ArrayBuffer;
     viewMode: ReaderViewMode;
     writingMode: WritingMode;
+    headingFonts: BookHeadingFonts;
     onTocReady: (toc: NavItem[]) => void;
   }
->(function EpubViewerWithNav({ data, viewMode, writingMode, onTocReady }, ref) {
+>(function EpubViewerWithNav(
+  { data, viewMode, writingMode, headingFonts, onTocReady },
+  ref,
+) {
   const renditionRef = useRef<Rendition | null>(null);
 
   useImperativeHandle(ref, () => ({
@@ -205,6 +219,7 @@ const EpubViewerWithNav = forwardRef<
       data={data}
       viewMode={viewMode}
       writingMode={writingMode}
+      headingFonts={headingFonts}
       onTocReady={onTocReady}
       onRendition={(rendition) => {
         renditionRef.current = rendition;

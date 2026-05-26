@@ -26,6 +26,7 @@ export async function validateReaderToken(tokenValue: string) {
       epub_storage_path: string | null;
       status: string;
       writing_mode: string;
+      heading_fonts?: unknown;
     };
   };
 }

@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -30,7 +31,10 @@ export default async function EditBookPage({ params }: PageProps) {
   return (
     <EditorWorkspace
       bookId={id}
-      initialBook={book}
+      initialBook={{
+        ...book,
+        heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+      }}
       initialChapters={chapters ?? []}
     />
   );

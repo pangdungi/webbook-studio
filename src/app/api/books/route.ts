@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  ensurePrimaryReaderToken,
+  primaryReaderUrlsByBookId,
+} from "@/lib/access/bookToken";
+import { buildReaderUrl } from "@/lib/utils/tokens";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
@@ -19,7 +24,21 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ books: data });
+  const bookIds = (data ?? []).map((b) => b.id);
+  const readerUrls = await primaryReaderUrlsByBookId(supabase, bookIds);
+
+  const books = await Promise.all(
+    (data ?? []).map(async (book) => {
+      let readerUrl = readerUrls[book.id] ?? null;
+      if (!readerUrl) {
+        const token = await ensurePrimaryReaderToken(supabase, book.id);
+        readerUrl = buildReaderUrl(token.token);
+      }
+      return { ...book, readerUrl };
+    }),
+  );
+
+  return NextResponse.json({ books });
 }
 
 export async function POST(request: Request) {
@@ -53,6 +72,20 @@ export async function POST(request: Request) {
 
   if (chapterError) {
     return NextResponse.json({ error: chapterError.message }, { status: 500 });
+  }
+
+  try {
+    await ensurePrimaryReaderToken(supabase, book.id);
+  } catch (tokenError) {
+    return NextResponse.json(
+      {
+        error:
+          tokenError instanceof Error
+            ? tokenError.message
+            : "독자 링크 생성에 실패했습니다.",
+      },
+      { status: 500 },
+    );
   }
 
   return NextResponse.json({ book }, { status: 201 });
