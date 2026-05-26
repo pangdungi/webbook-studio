@@ -29,9 +29,9 @@ function chapterOpenerCss(important = false) {
       min-height: 70vh${i};
       display: flex${i};
       flex-direction: column${i};
-      align-items: center${i};
+      align-items: flex-start${i};
       justify-content: flex-start${i};
-      text-align: center${i};
+      text-align: left${i};
       padding: 3.5rem 1rem 2rem${i};
       background-color: ${CHAPTER_OPENER_BG}${i};
       page-break-after: always${i};
@@ -49,7 +49,7 @@ function chapterOpenerCss(important = false) {
       font-size: 1.55em${i};
       font-weight: 700${i};
       line-height: 1.45${i};
-      text-align: center${i};
+      text-align: left${i};
       text-indent: 0${i};
       white-space: pre-line${i};
       overflow-wrap: anywhere${i};
