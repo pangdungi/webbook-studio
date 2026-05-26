@@ -4,7 +4,11 @@ import {
   bookPageClass,
   bookPageContentClass,
   bookPageCoverClass,
+  bookPageQuoteClass,
   bookPageShellClass,
+  bookQuotePageClass,
+  bookQuoteSourceClass,
+  bookQuoteTextClass,
 } from "@/lib/pages/bookPageCss";
 import type { BookPage } from "@/lib/pages/types";
 import { wrapImagesInHtml } from "@/lib/typography/imageLayout";
@@ -25,6 +29,13 @@ export function buildPageEpubHtml(
   if (page.kind === "chapter-cover") {
     const safeTitle = escapeHtml(chapterTitle.trim() || "제목 없음");
     return `<div class="${bookPageShellClass}"><article class="${bookPageClass} ${bookPageCoverClass}"><div class="${bookPageBodyClass}"><h1 class="${bookChapterTitleClass}">${safeTitle}</h1></div></article></div>`;
+  }
+
+  if (page.kind === "quote") {
+    const body =
+      page.content_html?.trim() ||
+      `<div class="${bookQuotePageClass}"><blockquote class="${bookQuoteTextClass}"></blockquote><p class="${bookQuoteSourceClass}"></p></div>`;
+    return `<div class="${bookPageShellClass}"><article class="${bookPageClass} ${bookPageQuoteClass}"><div class="${bookPageBodyClass}">${body}</div></article></div>`;
   }
 
   const body = wrapImagesInHtml(page.content_html?.trim() || "<p class=\"book-body-p\"></p>");

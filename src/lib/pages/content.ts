@@ -4,6 +4,10 @@ import {
   type ChapterContentV2,
   type PageKind,
 } from "@/lib/pages/types";
+import {
+  EMPTY_QUOTE_CONTENT,
+  quoteContentToHtml,
+} from "@/lib/pages/quotePage";
 
 export const EMPTY_TIPTAP_DOC: Record<string, unknown> = {
   type: "doc",
@@ -18,11 +22,33 @@ export function createPageId(): string {
 }
 
 export function createPage(kind: PageKind, content?: Record<string, unknown>): BookPage {
+  if (kind === "chapter-cover") {
+    return {
+      id: createPageId(),
+      kind,
+      content: content ?? structuredClone(EMPTY_TIPTAP_DOC),
+      content_html: "",
+    };
+  }
+
+  if (kind === "quote") {
+    const quoteContent = content ?? structuredClone(EMPTY_QUOTE_CONTENT);
+    return {
+      id: createPageId(),
+      kind,
+      content: quoteContent,
+      content_html: quoteContentToHtml(
+        typeof quoteContent.quote === "string" ? quoteContent.quote : "",
+        typeof quoteContent.source === "string" ? quoteContent.source : "",
+      ),
+    };
+  }
+
   return {
     id: createPageId(),
     kind,
     content: content ?? structuredClone(EMPTY_TIPTAP_DOC),
-    content_html: kind === "chapter-cover" ? "" : "<p class=\"book-body-p\"></p>",
+    content_html: "<p class=\"book-body-p\"></p>",
   };
 }
 
@@ -50,7 +76,12 @@ export function parseChapterContent(
   if (isChapterContentV2(json)) {
     const pages = json.pages.map((p) => ({
       id: p.id || createPageId(),
-      kind: p.kind === "chapter-cover" ? "chapter-cover" : "content",
+      kind:
+        p.kind === "chapter-cover"
+          ? "chapter-cover"
+          : p.kind === "quote"
+            ? "quote"
+            : "content",
       content: p.content ?? structuredClone(EMPTY_TIPTAP_DOC),
       content_html: p.content_html ?? "",
     })) as BookPage[];

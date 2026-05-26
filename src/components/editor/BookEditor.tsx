@@ -1,6 +1,7 @@
 "use client";
 
 import { ContentPageArticle } from "./ContentPageArticle";
+import { QuotePageArticle } from "./QuotePageArticle";
 import type { ImageAlignValue } from "./ImageAlignExtension";
 import {
   bookChapterTitleClass,
@@ -17,7 +18,8 @@ import {
   createPage,
   parseChapterContent,
 } from "@/lib/pages/content";
-import type { BookPage } from "@/lib/pages/types";
+import type { BookPage, PageKind } from "@/lib/pages/types";
+import { quoteContentToHtml } from "@/lib/pages/quotePage";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import type { SpellCorrection } from "@/lib/types/database";
@@ -223,6 +225,21 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [persist],
   );
 
+  const handleQuoteUpdate = useCallback(
+    (pageId: string, quote: string, source: string) => {
+      const content = { type: "quote" as const, quote, source };
+      const html = quoteContentToHtml(quote, source);
+      setPages((prev) => {
+        const next = prev.map((p) =>
+          p.id === pageId ? { ...p, content, content_html: html } : p,
+        );
+        queueMicrotask(() => persist(next));
+        return next;
+      });
+    },
+    [persist],
+  );
+
   const registerEditor = useCallback(
     (pageId: string, editor: Editor | null) => {
       editorsRef.current.set(pageId, editor);
@@ -303,8 +320,8 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [scrollToPage],
   );
 
-  const addPage = () => {
-    const page = createPage("content");
+  const addPage = (kind: Extract<PageKind, "content" | "quote">) => {
+    const page = createPage(kind);
     setPages((prev) => {
       const next = [...prev, page];
       persist(next);
@@ -316,8 +333,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   };
 
   const deletePage = (pageId: string) => {
+    const target = pages.find((p) => p.id === pageId);
+    if (!target || target.kind === "chapter-cover") return;
+
     const contentPages = pages.filter((p) => p.kind === "content");
-    if (contentPages.length <= 1) return;
+    if (target.kind === "content" && contentPages.length <= 1) return;
 
     setPages((prev) => {
       const next = prev.filter((p) => p.id !== pageId);
@@ -325,13 +345,13 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       return next;
     });
     if (activePageId === pageId) {
-      const remaining = pages.filter(
-        (p) => p.id !== pageId && p.kind === "content",
-      );
-      const nextId = remaining[0]?.id ?? pages[0]?.id ?? "";
-      requestAnimationFrame(() => {
-        selectPage(nextId);
-      });
+      const idx = pages.findIndex((p) => p.id === pageId);
+      const fallback = pages[idx + 1] ?? pages[idx - 1];
+      if (fallback) {
+        requestAnimationFrame(() => {
+          selectPage(fallback.id);
+        });
+      }
     }
   };
 
@@ -445,6 +465,20 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const contentPageIndex = (id: string) =>
     pages.filter((p) => p.kind === "content").findIndex((p) => p.id === id);
 
+  const activePage = pages.find((p) => p.id === activePageId);
+  const isContentPageActive = activePage?.kind === "content";
+  const canDeleteActivePage =
+    !!activePage &&
+    activePage.kind !== "chapter-cover" &&
+    (activePage.kind !== "content" ||
+      pages.filter((p) => p.kind === "content").length > 1);
+
+  const pageTabLabel = (page: BookPage) => {
+    if (page.kind === "chapter-cover") return "표지";
+    if (page.kind === "quote") return "명";
+    return String(contentPageIndex(page.id) + 1);
+  };
+
   useEffect(() => {
     requestAnimationFrame(() => scrollToPage(activePageId));
   }, [chapterId, scrollToPage]);
@@ -454,6 +488,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-white px-4 py-2">
         <ToolbarButton
           active={activeEditor?.isActive("heading", { level: 2 })}
+          disabled={!isContentPageActive}
           onClick={() =>
             activeEditor?.chain().focus().toggleHeading({ level: 2 }).run()
           }
@@ -463,6 +498,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("heading", { level: 3 })}
+          disabled={!isContentPageActive}
           onClick={() =>
             activeEditor?.chain().focus().toggleHeading({ level: 3 }).run()
           }
@@ -472,6 +508,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("paragraph")}
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().setParagraph().run()}
           title="본문"
         >
@@ -479,24 +516,29 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("bold")}
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().toggleBold().run()}
         >
           B
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("italic")}
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().toggleItalic().run()}
         >
           I
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("underline")}
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().toggleUnderline().run()}
         >
           U
         </ToolbarButton>
-        <ToolbarButton onClick={uploadImage}>이미지</ToolbarButton>
-        {imageSelected && (
+        <ToolbarButton disabled={!isContentPageActive} onClick={uploadImage}>
+          이미지
+        </ToolbarButton>
+        {imageSelected && isContentPageActive && (
           <>
             <span className="mx-1 text-xs text-stone-400">|</span>
             <ToolbarButton
@@ -520,17 +562,21 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           </>
         )}
         <ToolbarButton
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().toggleBlockquote().run()}
         >
           인용
         </ToolbarButton>
         <ToolbarButton
+          disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().setHorizontalRule().run()}
         >
           구분선
         </ToolbarButton>
         <div className="flex-1" />
-        <ToolbarButton onClick={runSpellcheck}>맞춤법 검사</ToolbarButton>
+        <ToolbarButton disabled={!isContentPageActive} onClick={runSpellcheck}>
+          맞춤법 검사
+        </ToolbarButton>
       </div>
 
       <div className="flex items-center gap-2 border-b border-stone-100 bg-stone-50 px-4 py-2 text-xs text-stone-600">
@@ -546,28 +592,32 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                 : "bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100"
             }`}
           >
-            {page.kind === "chapter-cover"
-              ? "표지"
-              : contentPageIndex(page.id) + 1}
+            {pageTabLabel(page)}
           </button>
         ))}
         <button
           type="button"
-          onClick={addPage}
+          onClick={() => addPage("content")}
           className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
         >
-          + 페이지
+          + 본문
         </button>
-        {pages.find((p) => p.id === activePageId)?.kind === "content" &&
-          pages.filter((p) => p.kind === "content").length > 1 && (
-            <button
-              type="button"
-              onClick={() => deletePage(activePageId)}
-              className="ml-auto text-red-600 hover:underline"
-            >
-              페이지 삭제
-            </button>
-          )}
+        <button
+          type="button"
+          onClick={() => addPage("quote")}
+          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
+        >
+          + 명언
+        </button>
+        {canDeleteActivePage && (
+          <button
+            type="button"
+            onClick={() => deletePage(activePageId)}
+            className="ml-auto text-red-600 hover:underline"
+          >
+            페이지 삭제
+          </button>
+        )}
       </div>
 
       <div
@@ -591,6 +641,18 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                   <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
                 </div>
               </article>
+            ) : page.kind === "quote" ? (
+              <QuotePageArticle
+                key={page.id}
+                page={page}
+                isActive={page.id === activePageId}
+                onSelect={selectPage}
+                onUpdate={handleQuoteUpdate}
+                pageRef={(el) => {
+                  if (el) pageRefs.current.set(page.id, el);
+                  else pageRefs.current.delete(page.id);
+                }}
+              />
             ) : (
               <ContentPageArticle
                 key={page.id}

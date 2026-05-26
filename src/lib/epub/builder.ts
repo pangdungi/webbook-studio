@@ -39,7 +39,9 @@ export async function buildEpubBuffer(
       title:
         page.kind === "chapter-cover"
           ? ch.title
-          : `${ch.title} ${contentPageNumber(parsed.pages, page.id)}`,
+          : page.kind === "quote"
+            ? `${ch.title} 명언`
+            : `${ch.title} ${contentPageNumber(parsed.pages, page.id)}`,
       content: buildPageEpubHtml(page, ch.title),
       excludeFromToc: page.kind !== "chapter-cover",
     }));

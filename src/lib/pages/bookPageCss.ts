@@ -11,7 +11,11 @@ export const bookPageBodyClass = "book-page__body";
 export const bookPageShellClass = "book-page-shell";
 export const bookPageCoverClass = "book-page--cover";
 export const bookPageContentClass = "book-page--content";
+export const bookPageQuoteClass = "book-page--quote";
 export const bookChapterTitleClass = "book-chapter-title";
+export const bookQuotePageClass = "book-quote-page";
+export const bookQuoteTextClass = "book-quote-text";
+export const bookQuoteSourceClass = "book-quote-source";
 
 function pageBoxCss(p: string, important = false) {
   const i = important ? " !important" : "";
@@ -69,6 +73,49 @@ function pageBoxCss(p: string, important = false) {
       overflow-wrap: anywhere${i};
       word-break: keep-all${i};
       color: #0c0a09${i};
+    }
+    ${quotePageCss(p, i)}
+  `;
+}
+
+function quotePageCss(p: string, i: string) {
+  return `
+    ${p}.${bookPageQuoteClass} {
+      background-color: #ffffff${i};
+    }
+    ${p}.${bookPageQuoteClass} .${bookPageBodyClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      justify-content: center${i};
+      align-items: flex-end${i};
+      overflow: hidden${i};
+    }
+    ${p} .${bookQuotePageClass} {
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: 85%${i};
+      text-align: right${i};
+    }
+    ${p} .${bookQuoteTextClass} {
+      margin: 0 0 1.25em${i};
+      padding: 0${i};
+      border: none${i};
+      font-size: 1.05em${i};
+      line-height: 1.65${i};
+      font-style: italic${i};
+      color: #292524${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
+    }
+    ${p} .${bookQuoteSourceClass} {
+      margin: 0${i};
+      font-size: 0.9em${i};
+      line-height: 1.5${i};
+      color: #78716c${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
     }
   `;
 }
@@ -129,6 +176,25 @@ export function bookPageEditorShellCss() {
     .book-page--content .ProseMirror {
       min-height: 100%;
       outline: none;
+    }
+    .book-page--quote textarea {
+      display: block;
+      width: 100%;
+      resize: none;
+      border: none;
+      background: transparent;
+      outline: none;
+      font-family: inherit;
+    }
+    .book-page--quote textarea.book-quote-text {
+      min-height: 3.5em;
+    }
+    .book-page--quote textarea.book-quote-text::placeholder,
+    .book-page--quote textarea.book-quote-source::placeholder {
+      color: #d6d3d1;
+    }
+    .book-page--quote textarea.book-quote-source {
+      min-height: 1.5em;
     }
   `;
 }
