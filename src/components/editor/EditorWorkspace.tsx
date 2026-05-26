@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { BookEditor } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
-import { CopyField } from "@/components/home/CopyField";
 import type { Book, Chapter } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import {
@@ -14,17 +13,16 @@ import {
   normalizeBookHeadingFonts,
   type HeadingFontRole,
 } from "@/lib/typography/headingFonts";
+import { useEditorSessionLock } from "@/components/editor/useEditorSessionLock";
 
 type Props = {
   bookId: string;
-  readerUrl: string;
   initialBook: Book;
   initialChapters: Chapter[];
 };
 
 export function EditorWorkspace({
   bookId,
-  readerUrl,
   initialBook,
   initialChapters,
 }: Props) {
@@ -40,6 +38,11 @@ export function EditorWorkspace({
   const [publishing, setPublishing] = useState(false);
   const [message, setMessage] = useState("");
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [saveState, setSaveState] = useState<
+    "saved" | "pending" | "saving" | "error"
+  >("saved");
+
+  const { status: lockStatus, retry: retryLock } = useEditorSessionLock(bookId);
 
   const activeChapter = chapters.find((c) => c.id === activeChapterId);
 
@@ -66,14 +69,46 @@ export function EditorWorkspace({
       contentJson: Record<string, unknown>,
       contentHtml: string,
     ) => {
-      await fetch(`/api/chapters/${chapterId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ content_json: contentJson, content_html: contentHtml }),
+      const body = JSON.stringify({
+        content_json: contentJson,
+        content_html: contentHtml,
       });
+
+      const attempt = async () => {
+        const res = await fetch(`/api/chapters/${chapterId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body,
+          keepalive: true,
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof data.error === "string" ? data.error : "저장에 실패했습니다.",
+          );
+        }
+      };
+
+      try {
+        await attempt();
+      } catch {
+        await attempt();
+      }
     },
     [],
   );
+
+  useEffect(() => {
+    const warnOnLeave = (event: BeforeUnloadEvent) => {
+      if (saveState === "pending" || saveState === "saving" || saveState === "error") {
+        event.preventDefault();
+        event.returnValue = "";
+      }
+    };
+
+    window.addEventListener("beforeunload", warnOnLeave);
+    return () => window.removeEventListener("beforeunload", warnOnLeave);
+  }, [saveState]);
 
   const addChapter = async () => {
     const res = await fetch(`/api/books/${bookId}/chapters`, {
@@ -171,7 +206,7 @@ export function EditorWorkspace({
     setBook(data.book);
     const title = (data.book?.title ?? book.title).trim() || "제목 없음";
     setMessage(
-      `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl ?? readerUrl}`,
+      `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl ?? ""}`,
     );
   };
 
@@ -180,6 +215,45 @@ export function EditorWorkspace({
       setActiveChapterId(chapters[0].id);
     }
   }, [chapters, activeChapterId]);
+
+  if (lockStatus === "checking") {
+    return (
+      <div className="flex h-[100dvh] items-center justify-center bg-stone-50 text-sm text-stone-500">
+        편집기 연결 확인 중…
+      </div>
+    );
+  }
+
+  if (lockStatus === "blocked") {
+    return (
+      <div className="flex h-[100dvh] flex-col items-center justify-center bg-stone-50 px-6 text-center">
+        <h1 className="text-xl font-semibold text-stone-900">
+          이 책은 이미 다른 탭에서 열려 있습니다
+        </h1>
+        <p className="mt-3 max-w-md text-sm leading-relaxed text-stone-600">
+          한 번에 하나의 편집 창만 사용할 수 있습니다.
+          <br />
+          다른 탭을 <strong>닫은 뒤</strong> 아래 「다시 열기」를 누르세요.
+        </p>
+        <div className="mt-8 flex flex-wrap justify-center gap-3">
+          <button
+            type="button"
+            onClick={retryLock}
+            className="rounded-lg bg-stone-900 px-4 py-2 text-sm font-medium text-white"
+          >
+            다시 열기
+          </button>
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="rounded-lg border border-stone-300 px-4 py-2 text-sm text-stone-700"
+          >
+            목록으로
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[100dvh] flex-col">
@@ -272,6 +346,21 @@ export function EditorWorkspace({
         >
           {book.status === "published" ? "출판됨" : "초안"}
         </span>
+        <span
+          className={`hidden text-xs sm:inline ${
+            saveState === "error"
+              ? "font-medium text-red-600"
+              : saveState === "saved"
+                ? "text-stone-400"
+                : "text-stone-500"
+          }`}
+          aria-live="polite"
+        >
+          {saveState === "saved" && "저장됨"}
+          {saveState === "pending" && "저장 대기…"}
+          {saveState === "saving" && "저장 중…"}
+          {saveState === "error" && "저장 실패 — 잠시 후 다시 시도됩니다"}
+        </span>
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
@@ -294,18 +383,6 @@ export function EditorWorkspace({
           {publishing ? "출판 중..." : "출판"}
         </button>
       </header>
-
-      <div className="shrink-0 border-b border-stone-100 bg-stone-50/80 px-4 py-2">
-        <CopyField
-          label={`「${book.title.trim() || "제목 없음"}」 독자 링크`}
-          value={readerUrl}
-          hint={
-            book.status === "published"
-              ? "이 책 전용 주소입니다. 출판할 때마다 같은 링크에 내용만 갱신됩니다."
-              : "출판 전까지는 열리지 않습니다. 출판 후 이 주소로 독자가 읽습니다."
-          }
-        />
-      </div>
 
       <DevicePreviewModal
         bookId={bookId}
@@ -342,6 +419,7 @@ export function EditorWorkspace({
             initialContentHtml={activeChapter.content_html}
             onContentChange={updateChapterContent}
             onSave={saveChapter}
+            onSaveState={setSaveState}
           />
         )}
       </div>

@@ -11,6 +11,7 @@ import { useEffect } from "react";
 type Props = {
   pageId: string;
   initialContent: Record<string, unknown>;
+  editable?: boolean;
   onUpdate: (pageId: string, json: Record<string, unknown>, html: string) => void;
   onFocus: (pageId: string) => void;
   registerEditor: (pageId: string, editor: Editor | null) => void;
@@ -19,6 +20,7 @@ type Props = {
 export function PageTipTapEditor({
   pageId,
   initialContent,
+  editable = true,
   onUpdate,
   onFocus,
   registerEditor,
@@ -30,13 +32,17 @@ export function PageTipTapEditor({
       Underline,
       ImageAlign.configure({ inline: false }),
       Placeholder.configure({
-        placeholder: "이 페이지에 글을 작성하세요.",
+        placeholder: editable
+          ? "이 페이지에 글을 작성하세요."
+          : "편집하려면 위에서 이 페이지를 선택하세요.",
       }),
     ],
     content: initialContent,
+    editable,
     immediatelyRender: false,
     enableInputRules: false,
     onUpdate: ({ editor: ed }) => {
+      if (!ed.isEditable) return;
       onUpdate(pageId, ed.getJSON() as Record<string, unknown>, ed.getHTML());
     },
     onFocus: () => onFocus(pageId),
@@ -44,20 +50,14 @@ export function PageTipTapEditor({
 
   useEffect(() => {
     if (!editor) return;
-    registerEditor(pageId, editor);
-    return () => registerEditor(pageId, null);
-  }, [editor, pageId, registerEditor]);
+    editor.setEditable(editable);
+  }, [editor, editable]);
 
   useEffect(() => {
     if (!editor) return;
-    queueMicrotask(() => {
-      onUpdate(
-        pageId,
-        editor.getJSON() as Record<string, unknown>,
-        editor.getHTML(),
-      );
-    });
-  }, [editor, pageId, onUpdate]);
+    registerEditor(pageId, editor);
+    return () => registerEditor(pageId, null);
+  }, [editor, pageId, registerEditor]);
 
   if (!editor) return null;
 

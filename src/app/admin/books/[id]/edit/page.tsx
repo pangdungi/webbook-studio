@@ -1,10 +1,8 @@
 import { notFound } from "next/navigation";
 import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
-import { ensurePrimaryReaderToken } from "@/lib/access/bookToken";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
-import { buildReaderUrl } from "@/lib/utils/tokens";
 
 type PageProps = { params: Promise<{ id: string }> };
 
@@ -24,9 +22,6 @@ export default async function EditBookPage({ params }: PageProps) {
 
   if (!book) notFound();
 
-  const readerToken = await ensurePrimaryReaderToken(supabase, id);
-  const readerUrl = buildReaderUrl(readerToken.token);
-
   const { data: chapters } = await supabase
     .from("chapters")
     .select("*")
@@ -36,7 +31,6 @@ export default async function EditBookPage({ params }: PageProps) {
   return (
     <EditorWorkspace
       bookId={id}
-      readerUrl={readerUrl}
       initialBook={{
         ...book,
         heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),

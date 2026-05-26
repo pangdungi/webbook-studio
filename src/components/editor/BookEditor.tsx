@@ -44,16 +44,19 @@ type Props = {
     chapterId: string,
     contentJson: Record<string, unknown>,
     contentHtml: string,
-  ) => void;
+  ) => void | Promise<void>;
+  onSaveState?: (state: "pending" | "saving" | "saved" | "error") => void;
 };
 
 function ToolbarButton({
   active,
+  disabled,
   onClick,
   children,
   title,
 }: {
   active?: boolean;
+  disabled?: boolean;
   onClick: () => void;
   children: React.ReactNode;
   title?: string;
@@ -62,8 +65,9 @@ function ToolbarButton({
     <button
       type="button"
       title={title}
+      disabled={disabled}
       onClick={onClick}
-      className={`rounded px-2 py-1 text-sm ${
+      className={`rounded px-2 py-1 text-sm disabled:cursor-not-allowed disabled:opacity-40 ${
         active
           ? "bg-stone-900 text-white"
           : "text-stone-600 hover:bg-stone-100"
@@ -82,17 +86,22 @@ export function BookEditor({
   initialContentHtml = "",
   onContentChange,
   onSave,
+  onSaveState,
 }: Props) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterIdRef = useRef(chapterId);
   const onSaveRef = useRef(onSave);
   const onContentChangeRef = useRef(onContentChange);
+  const onSaveStateRef = useRef(onSaveState);
+  const pendingSaveRef = useRef<{
+    chapterId: string;
+    contentJson: Record<string, unknown>;
+    contentHtml: string;
+  } | null>(null);
   const editorsRef = useRef<Map<string, Editor | null>>(new Map());
   const shellRef = useRef<HTMLDivElement>(null);
-
-  chapterIdRef.current = chapterId;
-  onSaveRef.current = onSave;
-  onContentChangeRef.current = onContentChange;
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const pageRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const [pages, setPages] = useState<BookPage[]>(() =>
     parseChapterContent(initialContent, chapterTitle, initialContentHtml).pages,
@@ -113,19 +122,55 @@ export function BookEditor({
 
   const activeEditor = editorsRef.current.get(activePageId) ?? null;
 
-  const persist = useCallback((nextPages: BookPage[]) => {
-    const json = chapterContentToJson(nextPages) as unknown as Record<
-      string,
-      unknown
-    >;
-    const html = chapterPagesToStorageHtml(nextPages);
-    onContentChangeRef.current(chapterIdRef.current, json, html);
+  chapterIdRef.current = chapterId;
+  onSaveRef.current = onSave;
+  onContentChangeRef.current = onContentChange;
+  onSaveStateRef.current = onSaveState;
 
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => {
-      onSaveRef.current(chapterIdRef.current, json, html);
-    }, 800);
+  const flushSave = useCallback(async () => {
+    saveTimer.current = null;
+    const pending = pendingSaveRef.current;
+    if (!pending) return;
+
+    const payload = { ...pending };
+    pendingSaveRef.current = null;
+    onSaveStateRef.current?.("saving");
+
+    try {
+      await onSaveRef.current(
+        payload.chapterId,
+        payload.contentJson,
+        payload.contentHtml,
+      );
+      onSaveStateRef.current?.("saved");
+    } catch {
+      pendingSaveRef.current = payload;
+      onSaveStateRef.current?.("error");
+    }
   }, []);
+
+  const persist = useCallback(
+    (nextPages: BookPage[]) => {
+      const json = chapterContentToJson(nextPages) as unknown as Record<
+        string,
+        unknown
+      >;
+      const html = chapterPagesToStorageHtml(nextPages);
+      pendingSaveRef.current = {
+        chapterId: chapterIdRef.current,
+        contentJson: json,
+        contentHtml: html,
+      };
+      onContentChangeRef.current(chapterIdRef.current, json, html);
+      onSaveStateRef.current?.("pending");
+
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        void flushSave();
+      }, 800);
+    },
+    [flushSave],
+  );
 
   const handlePageUpdate = useCallback(
     (pageId: string, json: Record<string, unknown>, html: string) => {
@@ -169,19 +214,56 @@ export function BookEditor({
 
   useEffect(() => {
     return () => {
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      const snapshot = pagesRef.current;
-      if (snapshot.length > 0) {
-        const json = chapterContentToJson(snapshot) as unknown as Record<
-          string,
-          unknown
-        >;
-        const html = chapterPagesToStorageHtml(snapshot);
-        onContentChangeRef.current(chapterIdRef.current, json, html);
-        onSaveRef.current(chapterIdRef.current, json, html);
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        saveTimer.current = null;
+      }
+      if (pendingSaveRef.current) {
+        void flushSave();
       }
     };
+  }, [flushSave]);
+
+  const scrollToPage = useCallback(function scrollToPage(
+    pageId: string,
+    focusEditor = false,
+    attempt = 0,
+  ) {
+    const scroller = scrollRef.current;
+    const pageEl = pageRefs.current.get(pageId);
+    if (!scroller || !pageEl) {
+      if (attempt < 4) {
+        requestAnimationFrame(() => scrollToPage(pageId, focusEditor, attempt + 1));
+      }
+      return;
+    }
+
+    const top =
+      pageEl.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+
+    scroller.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
+
+    if (!focusEditor) return;
+
+    const page = pagesRef.current.find((p) => p.id === pageId);
+    if (page?.kind !== "content") return;
+
+    window.setTimeout(() => {
+      editorsRef.current.get(pageId)?.commands.focus("end", { scrollIntoView: false });
+    }, 280);
   }, []);
+
+  const selectPage = useCallback(
+    (pageId: string) => {
+      setActivePageId(pageId);
+      requestAnimationFrame(() => {
+        scrollToPage(pageId, true);
+      });
+    },
+    [scrollToPage],
+  );
 
   const addPage = () => {
     const page = createPage("content");
@@ -190,7 +272,9 @@ export function BookEditor({
       persist(next);
       return next;
     });
-    setActivePageId(page.id);
+    requestAnimationFrame(() => {
+      selectPage(page.id);
+    });
   };
 
   const deletePage = (pageId: string) => {
@@ -206,7 +290,10 @@ export function BookEditor({
       const remaining = pages.filter(
         (p) => p.id !== pageId && p.kind === "content",
       );
-      setActivePageId(remaining[0]?.id ?? pages[0]?.id ?? "");
+      const nextId = remaining[0]?.id ?? pages[0]?.id ?? "";
+      requestAnimationFrame(() => {
+        selectPage(nextId);
+      });
     }
   };
 
@@ -320,6 +407,10 @@ export function BookEditor({
   const contentPageIndex = (id: string) =>
     pages.filter((p) => p.kind === "content").findIndex((p) => p.id === id);
 
+  useEffect(() => {
+    requestAnimationFrame(() => scrollToPage(activePageId));
+  }, [chapterId, scrollToPage]);
+
   return (
     <div className="relative flex flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-white px-4 py-2">
@@ -410,7 +501,7 @@ export function BookEditor({
           <button
             key={page.id}
             type="button"
-            onClick={() => setActivePageId(page.id)}
+            onClick={() => selectPage(page.id)}
             className={`rounded px-2 py-1 ${
               activePageId === page.id
                 ? "bg-stone-900 text-white"
@@ -441,14 +532,21 @@ export function BookEditor({
           )}
       </div>
 
-      <div className="book-page-editor-scroll flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        className="book-page-editor-scroll flex-1 overflow-y-auto"
+      >
         <div ref={shellRef} className={bookPageShellClass}>
           {pages.map((page) =>
             page.kind === "chapter-cover" ? (
               <article
                 key={page.id}
+                ref={(el) => {
+                  if (el) pageRefs.current.set(page.id, el);
+                  else pageRefs.current.delete(page.id);
+                }}
                 className={`${bookPageClass} ${bookPageCoverClass}`}
-                onClick={() => setActivePageId(page.id)}
+                onClick={() => selectPage(page.id)}
                 aria-label="장 표지"
               >
                 <div className={bookPageBodyClass}>
@@ -458,15 +556,22 @@ export function BookEditor({
             ) : (
               <article
                 key={page.id}
-                className={`${bookPageClass} ${bookPageContentClass}`}
-                onClick={() => setActivePageId(page.id)}
+                ref={(el) => {
+                  if (el) pageRefs.current.set(page.id, el);
+                  else pageRefs.current.delete(page.id);
+                }}
+                className={`${bookPageClass} ${bookPageContentClass} ${
+                  page.id !== activePageId ? "ring-1 ring-stone-200/80" : ""
+                }`}
+                onClick={() => selectPage(page.id)}
               >
                 <div className={bookPageBodyClass}>
                   <PageTipTapEditor
                     pageId={page.id}
                     initialContent={page.content}
+                    editable={page.id === activePageId}
                     onUpdate={handlePageUpdate}
-                    onFocus={setActivePageId}
+                    onFocus={(pageId) => setActivePageId(pageId)}
                     registerEditor={registerEditor}
                   />
                 </div>
