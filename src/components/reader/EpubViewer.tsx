@@ -271,7 +271,7 @@ export function EpubViewer({
         }
       };
 
-      rendition.on("rendered", (_section, view) => {
+      rendition.on("rendered", (_section: unknown, view: unknown) => {
         applyModeStyles();
         if (viewMode === "paginated") {
           const doc = (view as { contents?: { document?: Document } })?.contents
