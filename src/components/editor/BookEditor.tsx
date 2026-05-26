@@ -1,6 +1,6 @@
 "use client";
 
-import { PageTipTapEditor } from "./PageTipTapEditor";
+import { ContentPageArticle } from "./ContentPageArticle";
 import type { ImageAlignValue } from "./ImageAlignExtension";
 import {
   bookChapterTitleClass,
@@ -592,28 +592,18 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                 </div>
               </article>
             ) : (
-              <article
+              <ContentPageArticle
                 key={page.id}
-                ref={(el) => {
+                page={page}
+                isActive={page.id === activePageId}
+                onSelect={selectPage}
+                onUpdate={handlePageUpdate}
+                registerEditor={registerEditor}
+                pageRef={(el) => {
                   if (el) pageRefs.current.set(page.id, el);
                   else pageRefs.current.delete(page.id);
                 }}
-                className={`${bookPageClass} ${bookPageContentClass} ${
-                  page.id !== activePageId ? "ring-1 ring-stone-200/80" : ""
-                }`}
-                onClick={() => selectPage(page.id)}
-              >
-                <div className={bookPageBodyClass}>
-                  <PageTipTapEditor
-                    pageId={page.id}
-                    initialContent={page.content}
-                    editable={page.id === activePageId}
-                    onUpdate={handlePageUpdate}
-                    onFocus={(pageId) => setActivePageId(pageId)}
-                    registerEditor={registerEditor}
-                  />
-                </div>
-              </article>
+              />
             ),
           )}
         </div>
