@@ -25,17 +25,21 @@ function chapterOpenerCss(important = false) {
       box-sizing: border-box${i};
       min-height: 70vh${i};
       display: flex${i};
+      flex-direction: column${i};
       align-items: center${i};
-      justify-content: center${i};
+      justify-content: flex-start${i};
       text-align: center${i};
-      padding: 2rem 1rem${i};
+      padding: 3.5rem 1rem 2rem${i};
       page-break-after: always${i};
       break-after: page${i};
       -webkit-column-break-after: always${i};
     }
     .${chapterOpenerPageClass} h1.${bookChapterTitleClass} {
+      display: inline-block${i};
       margin: 0${i};
-      font-size: 1.75em${i};
+      padding: 1.1em 1.75em${i};
+      border: 2px solid #1c1917${i};
+      font-size: 1.55em${i};
       font-weight: 700${i};
       line-height: 1.35${i};
       text-align: center${i};
