@@ -1,5 +1,24 @@
 import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
 
+/** 본문 명조 — 편집기·EPUB·리더 공통 (고딕 fallback 제외) */
+export const NOTO_SERIF_KR_GOOGLE_CSS =
+  "https://fonts.googleapis.com/css2?family=Noto+Serif+KR:wght@400;600;700&display=swap";
+
+export const bookBodyFontFamily =
+  '"Noto Serif KR", "Apple Myungjo", "Batang", serif';
+
+export const bookFontFaceCss = `@import url("${NOTO_SERIF_KR_GOOGLE_CSS}");`;
+
+/** EPUB iframe — Google Fonts 로드 (부모 페이지 폰트는 상속되지 않음) */
+export function injectBookFonts(doc: Document) {
+  if (doc.getElementById("webbook-reader-fonts")) return;
+  const link = doc.createElement("link");
+  link.id = "webbook-reader-fonts";
+  link.rel = "stylesheet";
+  link.href = NOTO_SERIF_KR_GOOGLE_CSS;
+  doc.head.prepend(link);
+}
+
 /** 책 본문 타이포 계층 — 편집기·EPUB·리더 공통 기준
  *
  * 한국 소설·에세이 전자책 관례 (교보문고·KDP·국내 EPUB 가이드 참고):
@@ -70,7 +89,7 @@ export const responsiveBodyTextCss = `
 
 export const readerThemeStyles = {
   body: {
-    "font-family": '"Noto Serif KR", "Apple SD Gothic Neo", serif',
+    "font-family": bookBodyFontFamily,
     "font-size": "100%",
     "line-height": "1.75",
     color: "#1c1917",
@@ -122,10 +141,11 @@ export const readerThemeStyles = {
 
 export function epubTypographyCss(writingModeCss: string) {
   return `
+    ${bookFontFaceCss}
     ${writingModeCss}
     * { box-sizing: border-box; }
     body {
-      font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+      font-family: ${bookBodyFontFamily};
       font-size: 100%;
       line-height: 1.75;
       color: #1c1917;
@@ -259,6 +279,7 @@ export function readerInjectCss(
       overflow-x: hidden !important;
       box-sizing: border-box !important;
       -webkit-text-size-adjust: 100% !important;
+      font-family: ${bookBodyFontFamily} !important;
     }
     *, *::before, *::after {
       box-sizing: border-box !important;

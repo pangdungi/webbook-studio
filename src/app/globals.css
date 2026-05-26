@@ -18,7 +18,7 @@ body {
 .book-editor-surface .ProseMirror {
   outline: none;
   min-height: 400px;
-  font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+  font-family: var(--font-serif), "Noto Serif KR", "Apple Myungjo", "Batang", serif;
 }
 
 .book-editor-surface .ProseMirror p.book-body-p,
