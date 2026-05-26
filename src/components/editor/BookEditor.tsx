@@ -18,7 +18,7 @@ import {
   parseChapterContent,
 } from "@/lib/pages/content";
 import type { BookPage } from "@/lib/pages/types";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import type { SpellCorrection } from "@/lib/types/database";
 import {
@@ -46,6 +46,14 @@ type Props = {
     contentHtml: string,
   ) => void | Promise<void>;
   onSaveState?: (state: "pending" | "saving" | "saved" | "error") => void;
+};
+
+export type BookEditorHandle = {
+  flushPendingSave: () => Promise<{
+    chapterId: string;
+    contentJson: Record<string, unknown>;
+    contentHtml: string;
+  }>;
 };
 
 function ToolbarButton({
@@ -78,7 +86,8 @@ function ToolbarButton({
   );
 }
 
-export function BookEditor({
+export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEditor(
+  {
   chapterId,
   chapterTitle,
   bookId,
@@ -87,7 +96,9 @@ export function BookEditor({
   onContentChange,
   onSave,
   onSaveState,
-}: Props) {
+  },
+  ref,
+) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterIdRef = useRef(chapterId);
   const onSaveRef = useRef(onSave);
@@ -146,8 +157,35 @@ export function BookEditor({
     } catch {
       pendingSaveRef.current = payload;
       onSaveStateRef.current?.("error");
+      throw new Error("chapter save failed");
     }
   }, []);
+
+  const flushPendingSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    const snapshot = pagesRef.current;
+    const json = chapterContentToJson(snapshot) as unknown as Record<
+      string,
+      unknown
+    >;
+    const html = chapterPagesToStorageHtml(snapshot);
+    const payload = {
+      chapterId: chapterIdRef.current,
+      contentJson: json,
+      contentHtml: html,
+    };
+
+    pendingSaveRef.current = payload;
+    onContentChangeRef.current(chapterIdRef.current, json, html);
+    await flushSave();
+    return payload;
+  }, [flushSave]);
+
+  useImperativeHandle(ref, () => ({ flushPendingSave }), [flushPendingSave]);
 
   const persist = useCallback(
     (nextPages: BookPage[]) => {
@@ -597,4 +635,4 @@ export function BookEditor({
       )}
     </div>
   );
-}
+});

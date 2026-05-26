@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { BookEditor } from "@/components/editor/BookEditor";
+import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
 import type { Book, Chapter } from "@/lib/types/database";
@@ -41,6 +41,11 @@ export function EditorWorkspace({
   const [saveState, setSaveState] = useState<
     "saved" | "pending" | "saving" | "error"
   >("saved");
+  const [manualSaving, setManualSaving] = useState(false);
+
+  const editorRef = useRef<BookEditorHandle>(null);
+  const chaptersRef = useRef(chapters);
+  chaptersRef.current = chapters;
 
   const { status: lockStatus, retry: retryLock } = useEditorSessionLock(bookId);
 
@@ -68,10 +73,12 @@ export function EditorWorkspace({
       chapterId: string,
       contentJson: Record<string, unknown>,
       contentHtml: string,
+      title?: string,
     ) => {
       const body = JSON.stringify({
         content_json: contentJson,
         content_html: contentHtml,
+        ...(title !== undefined ? { title } : {}),
       });
 
       const attempt = async () => {
@@ -97,6 +104,77 @@ export function EditorWorkspace({
     },
     [],
   );
+
+  const saveAll = useCallback(async () => {
+    if (manualSaving) return;
+
+    setManualSaving(true);
+    setSaveState("saving");
+
+    try {
+      let chaptersToSave = [...chaptersRef.current];
+
+      const flushed = await editorRef.current?.flushPendingSave();
+      if (flushed) {
+        chaptersToSave = chaptersToSave.map((c) =>
+          c.id === flushed.chapterId
+            ? {
+                ...c,
+                content_json: flushed.contentJson,
+                content_html: flushed.contentHtml,
+              }
+            : c,
+        );
+      }
+
+      await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: book.title,
+          heading_fonts: book.heading_fonts,
+        }),
+      }).then(async (res) => {
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof data.error === "string" ? data.error : "책 정보 저장 실패",
+          );
+        }
+      });
+
+      await Promise.all(
+        chaptersToSave.map((c) =>
+          saveChapter(
+            c.id,
+            c.content_json,
+            c.content_html ?? "",
+            c.title,
+          ),
+        ),
+      );
+
+      setChapters(chaptersToSave);
+      setSaveState("saved");
+    } catch {
+      setSaveState("error");
+      alert("저장에 실패했습니다. 네트워크를 확인한 뒤 다시 「전체 저장」을 눌러 주세요.");
+    } finally {
+      setManualSaving(false);
+    }
+  }, [book.title, book.heading_fonts, bookId, manualSaving, saveChapter]);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        void saveAll();
+      }
+    };
+
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [saveAll]);
 
   useEffect(() => {
     const warnOnLeave = (event: BeforeUnloadEvent) => {
@@ -166,15 +244,6 @@ export function EditorWorkspace({
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
-    });
-  };
-
-  const updateWritingMode = async (writing_mode: Book["writing_mode"]) => {
-    setBook((b) => ({ ...b, writing_mode }));
-    await fetch(`/api/books/${bookId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ writing_mode }),
     });
   };
 
@@ -270,16 +339,6 @@ export function EditorWorkspace({
           onChange={(e) => updateBookTitle(e.target.value)}
           className="min-w-0 flex-1 bg-transparent text-lg font-semibold outline-none"
         />
-        <select
-          value={book.writing_mode}
-          onChange={(e) =>
-            updateWritingMode(e.target.value as Book["writing_mode"])
-          }
-          className="rounded-lg border border-stone-200 px-2 py-1 text-sm"
-        >
-          <option value="horizontal-tb">가로쓰기</option>
-          <option value="vertical-rl">세로쓰기</option>
-        </select>
         <div
           className="hidden items-center gap-2 rounded-lg border border-stone-200 px-2 py-1 text-xs text-stone-600 lg:flex"
           title="책 전체에 동일 적용 — 장·중·소제목만 변경, 본문은 명조"
@@ -359,8 +418,17 @@ export function EditorWorkspace({
           {saveState === "saved" && "저장됨"}
           {saveState === "pending" && "저장 대기…"}
           {saveState === "saving" && "저장 중…"}
-          {saveState === "error" && "저장 실패 — 잠시 후 다시 시도됩니다"}
+          {saveState === "error" && "저장 실패 — 다시 시도해 주세요"}
         </span>
+        <button
+          type="button"
+          onClick={() => void saveAll()}
+          disabled={manualSaving || publishing}
+          title="모든 챕터·설정을 서버에 저장 (⌘S / Ctrl+S)"
+          className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {manualSaving ? "저장 중…" : "전체 저장"}
+        </button>
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
@@ -411,6 +479,7 @@ export function EditorWorkspace({
         />
         {activeChapter && (
           <BookEditor
+            ref={editorRef}
             key={activeChapter.id}
             chapterId={activeChapter.id}
             chapterTitle={activeChapter.title}
