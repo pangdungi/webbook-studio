@@ -17,6 +17,9 @@ export const bookChapterTitleClass = "book-chapter-title";
 export const chapterOpenerPageClass = "chapter-opener-page";
 export const chapterBodyClass = "chapter-body";
 
+/** 장 표지 배경 — 본문(흰색)과 구분 */
+export const CHAPTER_OPENER_BG = "#f5f5f4";
+
 function chapterOpenerCss(important = false) {
   const i = important ? " !important" : "";
 
@@ -30,6 +33,7 @@ function chapterOpenerCss(important = false) {
       justify-content: flex-start${i};
       text-align: center${i};
       padding: 3.5rem 1rem 2rem${i};
+      background-color: ${CHAPTER_OPENER_BG}${i};
       page-break-after: always${i};
       break-after: page${i};
       -webkit-column-break-after: always${i};
@@ -49,6 +53,7 @@ function chapterOpenerCss(important = false) {
     }
     .${chapterBodyClass} {
       padding-top: 0${i};
+      background-color: #ffffff${i};
     }
   `;
 }
@@ -277,9 +282,14 @@ export function bookEditorCss() {
       min-height: 320px;
     }
     ${chapterOpenerCss()}
+    .book-prose .${chapterOpenerPageClass} {
+      margin: -1rem -0.875rem 0;
+      border-radius: 0.75rem 0.75rem 0 0;
+    }
     .${chapterBodyClass} {
       border-top: 1px solid #e7e5e4;
       padding-top: 1.25rem;
+      background-color: #fff;
     }
     ${proseContentCss(".book-prose .ProseMirror")}
     ${proseContainerCss(".book-prose")}
