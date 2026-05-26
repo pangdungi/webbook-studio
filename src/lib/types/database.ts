@@ -1,0 +1,60 @@
+export type UserRole = "admin" | "reader";
+export type BookStatus = "draft" | "published";
+export type WritingMode = "horizontal-tb" | "vertical-rl";
+
+export type Profile = {
+  id: string;
+  role: UserRole;
+  display_name: string | null;
+  created_at: string;
+};
+
+export type Book = {
+  id: string;
+  title: string;
+  subtitle: string | null;
+  cover_path: string | null;
+  writing_mode: WritingMode;
+  status: BookStatus;
+  epub_storage_path: string | null;
+  published_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Chapter = {
+  id: string;
+  book_id: string;
+  parent_id: string | null;
+  sort_order: number;
+  title: string;
+  content_json: Record<string, unknown>;
+  content_html: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BookAccessToken = {
+  id: string;
+  book_id: string;
+  token: string;
+  label: string;
+  expires_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+};
+
+export type SpellCorrection = {
+  from: string;
+  to: string;
+  reason: string;
+  offset: number;
+};
+
+export type SpellcheckResult = {
+  correctedText: string;
+  corrections: SpellCorrection[];
+  provider?: "anthropic" | "openai" | "local";
+  warning?: string;
+};

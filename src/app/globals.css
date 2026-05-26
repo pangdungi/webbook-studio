@@ -1,0 +1,217 @@
+@import "tailwindcss";
+
+@theme inline {
+  --font-sans: system-ui, -apple-system, "Apple SD Gothic Neo", sans-serif;
+  --font-serif: var(--font-serif), "Noto Serif KR", serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* TipTap 편집기 — 출판 본문 */
+.book-editor-surface {
+  container-type: inline-size;
+  container-name: editor;
+}
+
+.book-editor-surface .ProseMirror {
+  outline: none;
+  min-height: 400px;
+  font-family: "Noto Serif KR", "Apple SD Gothic Neo", serif;
+}
+
+.book-editor-surface .ProseMirror p.book-body-p,
+.book-editor-surface .ProseMirror p {
+  font-size: 1em;
+  font-weight: 400;
+  line-height: 1.75;
+  text-align: left;
+  text-indent: 1em !important;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+  word-spacing: normal;
+  letter-spacing: 0;
+  text-wrap: pretty;
+  margin: 0;
+  color: #1c1917;
+}
+
+@container editor (min-width: 32em) {
+  .book-editor-surface .ProseMirror p.book-body-p,
+  .book-editor-surface .ProseMirror p {
+    text-align: justify;
+    text-align-last: left;
+    text-justify: inter-word;
+  }
+}
+
+.book-editor-surface .ProseMirror h1 + p,
+.book-editor-surface .ProseMirror h2 + p,
+.book-editor-surface .ProseMirror h3 + p,
+.book-editor-surface .ProseMirror hr + p,
+.book-editor-surface .ProseMirror blockquote + p {
+  text-indent: 0 !important;
+}
+
+.book-editor-surface .ProseMirror p.is-editor-empty:first-child::before {
+  color: #a8a29e;
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+}
+
+.book-editor-surface .ProseMirror h1 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.4;
+  text-align: left;
+  text-indent: 0;
+  margin: 1.5rem 0 0.75rem;
+  color: #0c0a09;
+}
+
+.book-editor-surface .ProseMirror h2 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.45;
+  text-align: left;
+  text-indent: 0;
+  margin: 1.25rem 0 0.5rem;
+  color: #1c1917;
+}
+
+.book-editor-surface .ProseMirror h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  line-height: 1.5;
+  text-align: left;
+  text-indent: 0;
+  margin: 1rem 0 0.4rem;
+  color: #292524;
+}
+
+.book-editor-surface .ProseMirror blockquote {
+  text-align: left;
+  text-indent: 0;
+  border-left: 2px solid #d6d3d1;
+  padding-left: 0.85rem;
+  margin: 0.85rem 0;
+  color: #44403c;
+}
+
+.book-editor-surface .ProseMirror blockquote p {
+  text-align: left;
+  text-indent: 0 !important;
+}
+
+.book-editor-surface .ProseMirror img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem 0;
+}
+
+.book-editor-surface .ProseMirror img[data-align="center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.book-editor-surface .ProseMirror img[data-align="left"] {
+  display: block;
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.book-editor-surface .ProseMirror img[data-align="right"] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.book-editor-surface .ProseMirror hr {
+  border: none;
+  border-top: 1px solid #e7e5e4;
+  margin: 2rem 0;
+}
+
+/* EPUB 리더 영역 */
+.epub-viewer-root {
+  height: 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.epub-viewer-root > div.epub-container {
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
+.epub-viewer-root[data-mode="scroll"] > div.epub-container {
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+
+.epub-viewer-root[data-mode="paginated"] > div.epub-container {
+  overflow: hidden !important;
+  overflow-x: hidden !important;
+  overflow-y: hidden !important;
+}
+
+.epub-viewer-root > div:not(.epub-container) {
+  height: 100% !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.epub-viewer-root iframe {
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+/* 페이지 모드 — 데스크탑 좌우 끝 네비 (터치 기기는 스와이프) */
+.reader-edge-nav {
+  position: absolute;
+  top: 0;
+  z-index: 30;
+  display: none;
+  width: 3.5rem;
+  height: 100%;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  font-size: 2rem;
+  line-height: 1;
+  color: rgb(120 113 108);
+  cursor: pointer;
+  user-select: none;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .reader-edge-nav {
+    display: flex;
+  }
+
+  .reader-edge-nav:hover {
+    color: rgb(28 25 23);
+    background: rgb(28 25 23 / 0.04);
+  }
+}
+
+.reader-edge-nav--prev {
+  left: 0;
+}
+
+.reader-edge-nav--next {
+  right: 0;
+}
