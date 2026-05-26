@@ -5,9 +5,7 @@ import { useRouter } from "next/navigation";
 import { BookEditor } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
-import { CopyField } from "@/components/home/CopyField";
 import type { Book, Chapter } from "@/lib/types/database";
-import { buildClaimUrl } from "@/lib/utils/tokens";
 
 type Props = {
   bookId: string;
@@ -145,7 +143,7 @@ export function EditorWorkspace({
     }
 
     setBook(data.book);
-    setMessage(`출판 완료! 독자 링크: ${data.readerUrl}\n수령 페이지: ${data.claimUrl ?? buildClaimUrl(bookId)}`);
+    setMessage(`출판 완료! 독자 링크: ${data.readerUrl}`);
   };
 
   useEffect(() => {
@@ -220,17 +218,6 @@ export function EditorWorkspace({
       {message && (
         <div className="whitespace-pre-wrap bg-green-50 px-4 py-2 text-sm text-green-800">
           {message}
-        </div>
-      )}
-
-      {book.status === "published" && (
-        <div className="grid shrink-0 gap-2 border-b border-stone-100 bg-stone-50/80 px-4 py-3 sm:grid-cols-2">
-          <CopyField label="책 ID" value={bookId} />
-          <CopyField
-            label="수령 페이지 (아임웹 주문 안내용)"
-            value={buildClaimUrl(bookId)}
-            hint="구매자가 이메일·주문번호로 읽기 링크를 받는 주소"
-          />
         </div>
       )}
 

@@ -7,7 +7,6 @@ import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
 import { CopyField } from "@/components/home/CopyField";
 import { createClient } from "@/lib/supabase/client";
 import type { Book, BookAccessToken } from "@/lib/types/database";
-import { buildClaimUrl } from "@/lib/utils/tokens";
 
 type TokenWithUrl = BookAccessToken & { url: string };
 
@@ -146,13 +145,6 @@ export function BookDashboard() {
 
               <div className="mb-3 space-y-2">
                 <CopyField label="책 ID" value={book.id} />
-                {book.status === "published" && (
-                  <CopyField
-                    label="수령 페이지 (아임웹 주문 안내용)"
-                    value={buildClaimUrl(book.id)}
-                    hint="구매자가 이메일·주문번호 입력 후 읽기 링크를 받는 주소"
-                  />
-                )}
               </div>
 
               <div className="flex flex-wrap gap-2">

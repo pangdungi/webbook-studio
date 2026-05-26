@@ -11,8 +11,3 @@ export function getSiteUrl() {
 export function buildReaderUrl(token: string) {
   return `${getSiteUrl()}/read/${token}`;
 }
-
-export function buildClaimUrl(bookId: string) {
-  const base = getSiteUrl().replace(/\/$/, "");
-  return `${base}/claim?book=${bookId}`;
-}

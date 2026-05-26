@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { buildEpubBuffer } from "@/lib/epub/builder";
-import { buildReaderUrl, buildClaimUrl, generateAccessToken } from "@/lib/utils/tokens";
+import { buildReaderUrl, generateAccessToken } from "@/lib/utils/tokens";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
@@ -99,7 +99,6 @@ export async function POST(_request: Request, context: RouteContext) {
   return NextResponse.json({
     book: updatedBook,
     readerUrl: buildReaderUrl(token),
-    claimUrl: buildClaimUrl(bookId),
     token,
   });
 }
