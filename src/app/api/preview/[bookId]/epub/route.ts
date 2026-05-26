@@ -1,9 +1,9 @@
-import { streamEpubFromStorage } from "@/lib/epub/streamEpub";
+import { buildDraftEpubBuffer } from "@/lib/epub/buildDraft";
 import { requireAdmin } from "@/lib/supabase/admin";
-import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
+/** 현재 저장된 챕터로 EPUB 즉시 생성 (미리보기 전용) */
 export async function GET(_request: Request, context: RouteContext) {
   const admin = await requireAdmin();
   if (!admin) {
@@ -11,23 +11,16 @@ export async function GET(_request: Request, context: RouteContext) {
   }
 
   const { bookId } = await context.params;
-  const supabase = await createClient();
+  const result = await buildDraftEpubBuffer(bookId, admin.id);
 
-  const { data: book, error } = await supabase
-    .from("books")
-    .select("epub_storage_path, status, created_by")
-    .eq("id", bookId)
-    .eq("created_by", admin.id)
-    .single();
-
-  if (error || !book?.epub_storage_path || book.status !== "published") {
-    return new Response("Not found", { status: 404 });
+  if (!result.ok) {
+    return new Response(result.error, { status: result.status });
   }
 
-  const response = await streamEpubFromStorage(book.epub_storage_path);
-  if (!response) {
-    return new Response("EPUB unavailable", { status: 500 });
-  }
-
-  return response;
+  return new Response(new Uint8Array(result.buffer), {
+    headers: {
+      "Content-Type": "application/epub+zip",
+      "Cache-Control": "no-store, max-age=0",
+    },
+  });
 }

@@ -189,11 +189,11 @@ export function EditorWorkspace({
         <button
           type="button"
           onClick={() => setPreviewOpen(true)}
-          disabled={book.status !== "published"}
+          disabled={chapters.length === 0}
           title={
-            book.status !== "published"
-              ? "출판 후 미리보기할 수 있습니다"
-              : "독자 화면 미리보기"
+            chapters.length === 0
+              ? "챕터를 추가한 뒤 미리볼 수 있습니다"
+              : "현재 저장된 내용 기준 독자 화면 미리보기"
           }
           className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
         >
