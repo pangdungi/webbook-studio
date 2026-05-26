@@ -14,6 +14,40 @@ export const BOOK_PROSE_MAX_WIDTH = "42rem";
 export const BOOK_PROSE_PADDING = "1rem 0.875rem";
 
 export const bookChapterTitleClass = "book-chapter-title";
+export const chapterOpenerPageClass = "chapter-opener-page";
+export const chapterBodyClass = "chapter-body";
+
+function chapterOpenerCss(important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    .${chapterOpenerPageClass} {
+      box-sizing: border-box${i};
+      min-height: 70vh${i};
+      display: flex${i};
+      align-items: center${i};
+      justify-content: center${i};
+      text-align: center${i};
+      padding: 2rem 1rem${i};
+      page-break-after: always${i};
+      break-after: page${i};
+      -webkit-column-break-after: always${i};
+    }
+    .${chapterOpenerPageClass} h1.${bookChapterTitleClass} {
+      margin: 0${i};
+      font-size: 1.75em${i};
+      font-weight: 700${i};
+      line-height: 1.35${i};
+      text-align: center${i};
+      text-indent: 0${i};
+      color: #0c0a09${i};
+      word-break: keep-all${i};
+    }
+    .${chapterBodyClass} {
+      padding-top: 0${i};
+    }
+  `;
+}
 
 /** EPUB iframe — Google Fonts 로드 (부모 페이지 폰트는 상속되지 않음) */
 export function injectBookFonts(doc: Document) {
@@ -26,9 +60,8 @@ export function injectBookFonts(doc: Document) {
 }
 
 export const typographyGuide = {
-  chapter: "왼쪽 목차 (1장, 2장…) — 책의 큰 단락",
-  h1: "대제목 — 챕터 안의 큰 주제",
-  h2: "중제목 — 대제목 아래 소주제",
+  chapter: "목차 + 장 표지 — 왼쪽에서 이름을 바꾸면 표지 제목도 함께 바뀝니다",
+  h2: "중제목 — 장 본문 안의 큰 소주제",
   h3: "소제목 — 더 잘게 나눈 항목",
   p: "본문 — 양쪽 정렬 + 들여쓰기 (한국 소설형)",
 } as const;
@@ -237,13 +270,12 @@ export function bookEditorCss() {
     }
     .book-prose .ProseMirror {
       outline: none;
-      min-height: 400px;
+      min-height: 320px;
     }
-    .book-prose > h1.${bookChapterTitleClass} {
-      margin-top: 0;
-    }
-    .book-prose > h1.${bookChapterTitleClass} + .book-prose-editor .ProseMirror > p:first-of-type {
-      text-indent: 0 !important;
+    ${chapterOpenerCss()}
+    .${chapterBodyClass} {
+      border-top: 1px solid #e7e5e4;
+      padding-top: 1.25rem;
     }
     ${proseContentCss(".book-prose .ProseMirror")}
     ${proseContainerCss(".book-prose")}
@@ -350,11 +382,9 @@ export function epubTypographyCss(writingModeCss: string) {
     }
     ${proseContentCss("body")}
     ${proseContainerCss("html")}
+    ${chapterOpenerCss()}
     ${proseImageCss("scroll")}
     .epub-author, .epub-link { display: none; }
-    h1.${bookChapterTitleClass} {
-      margin-top: 0;
-    }
   `;
 }
 
@@ -381,10 +411,8 @@ export function readerInjectCss(
       margin: 0 auto !important;
     }
     ${proseContainerCss("html", true)}
+    ${chapterOpenerCss(true)}
     ${proseContentCss("body", true)}
-    body > h1:first-child {
-      margin-top: 0 !important;
-    }
     ${proseImageCss(viewMode)}
   `;
 }

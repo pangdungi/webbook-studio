@@ -56,7 +56,7 @@ export async function POST(request: Request, context: RouteContext) {
 
   const nextOrder = (existing?.[0]?.sort_order ?? -1) + 1;
   const title =
-    typeof body.title === "string" ? body.title : `챕터 ${nextOrder + 1}`;
+    typeof body.title === "string" ? body.title : `${nextOrder + 1}장`;
 
   const { data, error } = await supabase
     .from("chapters")

@@ -1,8 +1,8 @@
 import Epub from "epub-gen-memory";
 import type { Book, Chapter, WritingMode } from "@/lib/types/database";
 import { markTocNonLinear } from "@/lib/epub/postProcess";
+import { buildChapterEpubHtml } from "@/lib/typography/chapterLayout";
 import { epubTypographyCss } from "@/lib/typography/bookStyles";
-import { wrapImagesInHtml } from "@/lib/typography/imageLayout";
 
 function writingModeCss(mode: WritingMode) {
   if (mode === "vertical-rl") {
@@ -23,7 +23,7 @@ export async function buildEpubBuffer(
 
   const content = chapters.map((ch) => ({
     title: ch.title,
-    content: wrapImagesInHtml(ch.content_html || `<p>${ch.title}</p>`),
+    content: buildChapterEpubHtml(ch.title, ch.content_html),
   }));
 
   const options = {
@@ -35,7 +35,7 @@ export async function buildEpubBuffer(
     css,
     lang: "ko",
     tocTitle: "목차",
-    prependChapterTitles: true,
+    prependChapterTitles: false,
   };
 
   const raw = await Epub(options, content);

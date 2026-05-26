@@ -6,7 +6,11 @@ import Underline from "@tiptap/extension-underline";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { BookParagraph } from "./BookParagraph";
-import { bookChapterTitleClass } from "@/lib/typography/bookStyles";
+import {
+  bookChapterTitleClass,
+  chapterBodyClass,
+  chapterOpenerPageClass,
+} from "@/lib/typography/bookStyles";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import type { SpellCorrection } from "@/lib/types/database";
@@ -92,7 +96,9 @@ export function BookEditor({
       BookParagraph,
       Underline,
       ImageAlign.configure({ inline: false }),
-      Placeholder.configure({ placeholder: "여기에 글을 작성하세요..." }),
+      Placeholder.configure({
+        placeholder: "장 제목 다음 페이지부터 본문을 작성하세요. 중제목·소제목으로 구분할 수 있습니다.",
+      }),
     ],
     content: initialContent,
     immediatelyRender: false,
@@ -247,13 +253,6 @@ export function BookEditor({
     <div className="relative flex flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-white px-4 py-2">
         <ToolbarButton
-          active={editor.isActive("heading", { level: 1 })}
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          title="대제목"
-        >
-          대제목
-        </ToolbarButton>
-        <ToolbarButton
           active={editor.isActive("heading", { level: 2 })}
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
           title="중제목"
@@ -335,10 +334,12 @@ export function BookEditor({
 
       <div className="flex-1 overflow-y-auto bg-stone-50 p-4 sm:p-6">
         <div className="book-prose min-h-[60vh] rounded-xl bg-white shadow-sm">
-          <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
-          <div className="book-prose-editor">
+          <section className={chapterOpenerPageClass} aria-label="장 표지">
+            <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
+          </section>
+          <section className={`${chapterBodyClass} book-prose-editor`}>
             <EditorContent editor={editor} />
-          </div>
+          </section>
         </div>
       </div>
 
