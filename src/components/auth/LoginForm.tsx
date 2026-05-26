@@ -19,24 +19,34 @@ export function LoginForm() {
 
     const supabase = createClient();
 
-    if (mode === "password") {
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (authError) {
-        setError(authError.message);
+    try {
+      if (mode === "password") {
+        const { error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+        if (authError) {
+          setError(authError.message);
+          setLoading(false);
+          return;
+        }
+      } else {
+        const { error: authError } = await supabase.auth.signInWithOtp({ email });
+        if (authError) {
+          setError(authError.message);
+          setLoading(false);
+          return;
+        }
+        setError("이메일로 로그인 링크를 보냈습니다.");
         setLoading(false);
         return;
       }
-    } else {
-      const { error: authError } = await supabase.auth.signInWithOtp({ email });
-      if (authError) {
-        setError(authError.message);
-        setLoading(false);
-        return;
-      }
-      setError("이메일로 로그인 링크를 보냈습니다.");
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "로그인 요청에 실패했습니다. 환경 변수 설정을 확인해 주세요.",
+      );
       setLoading(false);
       return;
     }

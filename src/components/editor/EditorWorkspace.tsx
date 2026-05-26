@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { BookEditor } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
+import { CopyField } from "@/components/home/CopyField";
 import type { Book, Chapter } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import {
@@ -16,12 +17,14 @@ import {
 
 type Props = {
   bookId: string;
+  readerUrl: string;
   initialBook: Book;
   initialChapters: Chapter[];
 };
 
 export function EditorWorkspace({
   bookId,
+  readerUrl,
   initialBook,
   initialChapters,
 }: Props) {
@@ -166,8 +169,9 @@ export function EditorWorkspace({
     }
 
     setBook(data.book);
+    const title = (data.book?.title ?? book.title).trim() || "제목 없음";
     setMessage(
-      `출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl}`,
+      `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl ?? readerUrl}`,
     );
   };
 
@@ -290,6 +294,18 @@ export function EditorWorkspace({
           {publishing ? "출판 중..." : "출판"}
         </button>
       </header>
+
+      <div className="shrink-0 border-b border-stone-100 bg-stone-50/80 px-4 py-2">
+        <CopyField
+          label={`「${book.title.trim() || "제목 없음"}」 독자 링크`}
+          value={readerUrl}
+          hint={
+            book.status === "published"
+              ? "이 책 전용 주소입니다. 출판할 때마다 같은 링크에 내용만 갱신됩니다."
+              : "출판 전까지는 열리지 않습니다. 출판 후 이 주소로 독자가 읽습니다."
+          }
+        />
+      </div>
 
       <DevicePreviewModal
         bookId={bookId}

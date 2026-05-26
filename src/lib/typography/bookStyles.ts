@@ -14,6 +14,7 @@ import {
   bookPageReaderCss,
   bookChapterTitleClass as bookPageChapterTitleClass,
 } from "@/lib/pages/bookPageCss";
+import { readerContentProtectionCss } from "@/lib/reader/contentProtection";
 import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
 
 /** 본문 명조 — 편집기·EPUB·리더 공통 */
@@ -523,6 +524,7 @@ export function readerInjectCss(
   writingMode: "horizontal-tb" | "vertical-rl",
   viewMode: "scroll" | "paginated" = "scroll",
   headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  protectContent = false,
 ) {
   const modeCss =
     writingMode === "vertical-rl"
@@ -546,5 +548,6 @@ export function readerInjectCss(
     ${proseContentCss(`.${bookPageClass}.${bookPageContentClass}`, true)}
     ${proseContainerCss(`.${bookPageClass}`, true)}
     ${proseImageCss(viewMode)}
+    ${protectContent ? readerContentProtectionCss() : ""}
   `;
 }

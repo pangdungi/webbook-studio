@@ -11,6 +11,7 @@ import {
 import { injectBookFonts, readerInjectCss } from "@/lib/typography/bookStyles";
 import { syncBookPageMetrics, bookPageShellClass } from "@/lib/pages/bookPageCss";
 import { schedulePaginatedImageFix, getRenditionColumnWidth } from "@/lib/typography/imageLayout";
+import { attachReaderContentProtection } from "@/lib/reader/contentProtection";
 
 export type ReaderViewMode = "scroll" | "paginated";
 
@@ -19,6 +20,7 @@ type Props = {
   viewMode: ReaderViewMode;
   writingMode: WritingMode;
   headingFonts?: BookHeadingFonts;
+  protectContent?: boolean;
   onLocationChange?: (cfi: string) => void;
   onTocReady?: (toc: NavItem[]) => void;
   onRendition?: (rendition: Rendition) => void;
@@ -99,6 +101,7 @@ export function EpubViewer({
   viewMode,
   writingMode,
   headingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  protectContent = false,
   onLocationChange,
   onTocReady,
   onRendition,
@@ -109,12 +112,14 @@ export function EpubViewer({
   const savedCfiRef = useRef<string | null>(null);
   const viewModeRef = useRef(viewMode);
   const headingFontsRef = useRef(headingFonts);
+  const protectContentRef = useRef(protectContent);
   const readyRef = useRef(false);
   const onLocationChangeRef = useRef(onLocationChange);
   const onTocReadyRef = useRef(onTocReady);
   const onRenditionRef = useRef(onRendition);
   viewModeRef.current = viewMode;
   headingFontsRef.current = normalizeBookHeadingFonts(headingFonts);
+  protectContentRef.current = protectContent;
   onLocationChangeRef.current = onLocationChange;
   onTocReadyRef.current = onTocReady;
   onRenditionRef.current = onRendition;
@@ -271,7 +276,15 @@ export function EpubViewer({
           style.id = "webbook-reader-styles";
           doc.head.appendChild(style);
         }
-        style.textContent = readerInjectCss(writingMode, viewMode, fonts);
+        style.textContent = readerInjectCss(
+          writingMode,
+          viewMode,
+          fonts,
+          protectContentRef.current,
+        );
+        if (protectContentRef.current) {
+          attachReaderContentProtection(doc);
+        }
         if (viewMode === "paginated") {
           schedulePaginatedImageFix(doc, getRenditionColumnWidth(rendition));
         }
@@ -348,7 +361,7 @@ export function EpubViewer({
       renditionRef.current = null;
       bookRef.current = null;
     };
-  }, [data, viewMode, writingMode, mountSize, mountSession, fitToContainer, syncPageMetrics]);
+  }, [data, viewMode, writingMode, protectContent, mountSize, mountSession, fitToContainer, syncPageMetrics]);
 
   useEffect(() => {
     if (!ready) return;

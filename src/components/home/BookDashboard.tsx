@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
+import { CopyField } from "@/components/home/CopyField";
 import { createClient } from "@/lib/supabase/client";
 import type { Book } from "@/lib/types/database";
 
@@ -37,11 +38,6 @@ export function BookDashboard() {
     if (data.book) {
       router.push(`/admin/books/${data.book.id}/edit`);
     }
-  };
-
-  const copyReaderUrl = async (url: string) => {
-    await navigator.clipboard.writeText(url);
-    alert("독자 링크가 클립보드에 복사되었습니다.");
   };
 
   const deleteBook = async (book: BookListItem) => {
@@ -118,9 +114,47 @@ export function BookDashboard() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <>
+          <section className="mb-6 rounded-xl border border-stone-200 bg-white p-4 shadow-sm">
+            <h2 className="text-sm font-semibold text-stone-900">
+              책별 독자 링크
+            </h2>
+            <p className="mt-1 text-xs text-stone-500">
+              책마다 주소가 다릅니다. 아래에서 제목과 링크를 한눈에 확인하세요.
+            </p>
+            <ul className="mt-3 divide-y divide-stone-100">
+              {books.map((book) => {
+                const title = book.title.trim() || "제목 없음";
+                return (
+                  <li
+                    key={book.id}
+                    className="flex flex-col gap-1 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4"
+                  >
+                    <div className="min-w-0 shrink-0 sm:w-40">
+                      <p className="font-medium text-stone-900">{title}</p>
+                      <p className="text-[10px] text-stone-400">
+                        {book.status === "published" ? "출판됨" : "초안"} · ID{" "}
+                        {book.id.slice(0, 8)}…
+                      </p>
+                    </div>
+                    {book.readerUrl ? (
+                      <p className="min-w-0 flex-1 break-all font-mono text-[11px] leading-relaxed text-stone-700">
+                        {book.readerUrl}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-stone-400">링크 없음</p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {books.map((book) => {
             const isPublished = book.status === "published";
+            const displayTitle = book.title.trim() || "제목 없음";
+            const idHint = book.id.slice(0, 8);
 
             return (
               <article
@@ -128,7 +162,12 @@ export function BookDashboard() {
                 className="flex flex-col rounded-xl border border-stone-200 bg-white p-5 shadow-sm"
               >
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <h2 className="font-semibold text-stone-900">{book.title}</h2>
+                  <div className="min-w-0">
+                    <h2 className="font-semibold text-stone-900">{displayTitle}</h2>
+                    <p className="mt-0.5 font-mono text-[10px] text-stone-400">
+                      ID {idHint}…
+                    </p>
+                  </div>
                   <span
                     className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${
                       isPublished
@@ -159,25 +198,16 @@ export function BookDashboard() {
                 )}
 
                 {book.readerUrl ? (
-                  <div className="mb-4 rounded-lg bg-stone-50 p-3">
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
-                      독자 링크
-                    </p>
-                    <p className="break-all font-mono text-[11px] leading-relaxed text-stone-700">
-                      {book.readerUrl}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => copyReaderUrl(book.readerUrl!)}
-                      className="mt-2 text-xs font-medium text-stone-800 hover:underline"
-                    >
-                      링크 복사
-                    </button>
-                    {!isPublished && (
-                      <p className="mt-2 text-[11px] text-amber-700">
-                        출판 전까지 이 주소는 「준비 중」으로 보입니다.
-                      </p>
-                    )}
+                  <div className="mb-4">
+                    <CopyField
+                    label={`「${displayTitle}」 독자 링크`}
+                    value={book.readerUrl}
+                    hint={
+                      isPublished
+                        ? "이 책 전용 주소입니다. txt·아임웹에 이 링크만 넣으세요."
+                        : "출판 전까지는 열리지 않습니다. 출판 후 같은 주소로 읽을 수 있습니다."
+                    }
+                  />
                   </div>
                 ) : null}
 
@@ -217,7 +247,8 @@ export function BookDashboard() {
               </article>
             );
           })}
-        </div>
+          </div>
+        </>
       )}
 
       {previewBookId && (

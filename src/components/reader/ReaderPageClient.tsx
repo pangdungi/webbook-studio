@@ -67,6 +67,7 @@ export function ReaderPageClient({ token }: Props) {
         title={title}
         writingMode={writingMode}
         headingFonts={headingFonts}
+        protectContent
       />
     </div>
   );

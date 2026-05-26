@@ -21,6 +21,7 @@ type Props = {
   writingMode: WritingMode;
   headingFonts?: BookHeadingFonts;
   embedded?: boolean;
+  protectContent?: boolean;
 };
 
 export function WebBookReader({
@@ -29,6 +30,7 @@ export function WebBookReader({
   writingMode,
   headingFonts = DEFAULT_BOOK_HEADING_FONTS,
   embedded = false,
+  protectContent = false,
 }: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
   const [tocOpen, setTocOpen] = useState(false);
@@ -49,6 +51,24 @@ export function WebBookReader({
   const goNext = useCallback(() => navRef.current?.next(), []);
 
   useReaderSwipe(viewMode === "paginated", goPrev, goNext, readerAreaRef);
+
+  useEffect(() => {
+    if (!protectContent) return;
+
+    const block = (e: Event) => e.preventDefault();
+    const root = readerAreaRef.current;
+    if (!root) return;
+
+    root.addEventListener("contextmenu", block);
+    root.addEventListener("copy", block);
+    root.addEventListener("cut", block);
+
+    return () => {
+      root.removeEventListener("contextmenu", block);
+      root.removeEventListener("copy", block);
+      root.removeEventListener("cut", block);
+    };
+  }, [protectContent]);
 
   useEffect(() => {
     if (viewMode !== "paginated") return;
@@ -144,7 +164,7 @@ export function WebBookReader({
           ref={readerAreaRef}
           className={`relative min-h-0 min-w-0 flex-1 ${
             viewMode === "paginated" ? "touch-pan-x" : ""
-          }`}
+          } ${protectContent ? "select-none" : ""}`}
         >
           {loading && (
             <div className="flex h-full items-center justify-center text-sm text-stone-500">
@@ -163,6 +183,7 @@ export function WebBookReader({
               viewMode={viewMode}
               writingMode={writingMode}
               headingFonts={headingFonts}
+              protectContent={protectContent}
               onTocReady={handleTocReady}
             />
           )}
@@ -200,10 +221,11 @@ const EpubViewerWithNav = forwardRef<
     viewMode: ReaderViewMode;
     writingMode: WritingMode;
     headingFonts: BookHeadingFonts;
+    protectContent?: boolean;
     onTocReady: (toc: NavItem[]) => void;
   }
 >(function EpubViewerWithNav(
-  { data, viewMode, writingMode, headingFonts, onTocReady },
+  { data, viewMode, writingMode, headingFonts, protectContent, onTocReady },
   ref,
 ) {
   const renditionRef = useRef<Rendition | null>(null);
@@ -220,6 +242,7 @@ const EpubViewerWithNav = forwardRef<
       viewMode={viewMode}
       writingMode={writingMode}
       headingFonts={headingFonts}
+      protectContent={protectContent}
       onTocReady={onTocReady}
       onRendition={(rendition) => {
         renditionRef.current = rendition;

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
+import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
+import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { bookEditorCss } from "@/lib/typography/bookStyles";
 import "./globals.css";
 
@@ -25,11 +27,16 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const supabaseUrl = getSupabaseUrl();
+  const supabaseAnonKey = getSupabaseAnonKey();
+
   return (
     <html lang="ko" className={`${notoSerif.variable} ${notoSans.variable} h-full`}>
       <body className="h-full min-h-full bg-stone-50 font-sans antialiased">
         <style dangerouslySetInnerHTML={{ __html: bookEditorCss() }} />
-        {children}
+        <SupabaseProvider url={supabaseUrl} anonKey={supabaseAnonKey}>
+          {children}
+        </SupabaseProvider>
       </body>
     </html>
   );
