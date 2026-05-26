@@ -46,25 +46,27 @@ function ChapterRow({
 }) {
   return (
     <div
-      className={`group flex items-center gap-1 rounded-lg px-2 py-2 ${
+      className={`group flex items-start gap-1 rounded-lg px-2 py-2 ${
         active ? "bg-stone-900 text-white" : "hover:bg-stone-100"
       }`}
     >
       {dragHandle ?? (
-        <span className="cursor-default px-1 text-xs opacity-50">⋮⋮</span>
+        <span className="cursor-default px-1 pt-1.5 text-xs opacity-50">⋮⋮</span>
       )}
-      <input
+      <textarea
         value={chapter.title}
         onChange={(e) => onRename(chapter.id, e.target.value)}
         onFocus={() => onSelect(chapter.id)}
-        className={`min-w-0 flex-1 bg-transparent text-sm outline-none ${
-          active ? "text-white placeholder:text-stone-400" : ""
+        rows={2}
+        placeholder="장 제목 (Enter로 줄바꿈)"
+        className={`min-w-0 flex-1 resize-none bg-transparent text-sm leading-snug outline-none ${
+          active ? "text-white placeholder:text-stone-400" : "placeholder:text-stone-400"
         }`}
       />
       <button
         type="button"
         onClick={() => onDelete(chapter.id)}
-        className={`hidden px-1 text-xs group-hover:block ${
+        className={`hidden shrink-0 px-1 pt-1 text-xs group-hover:block ${
           active ? "text-stone-300 hover:text-white" : "text-stone-400 hover:text-red-600"
         }`}
       >
@@ -106,7 +108,7 @@ function SortableChapter({
         dragHandle={
           <button
             type="button"
-            className="cursor-grab px-1 text-xs opacity-50"
+            className="cursor-grab px-1 pt-1.5 text-xs opacity-50"
             {...attributes}
             {...listeners}
           >

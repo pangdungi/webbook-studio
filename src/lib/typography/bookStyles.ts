@@ -40,16 +40,21 @@ function chapterOpenerCss(important = false) {
     }
     .${chapterOpenerPageClass} h1.${bookChapterTitleClass} {
       display: inline-block${i};
+      box-sizing: border-box${i};
+      max-width: 100%${i};
+      width: auto${i};
       margin: 0${i};
       padding: 1.1em 1.75em${i};
       border: 2px solid #1c1917${i};
       font-size: 1.55em${i};
       font-weight: 700${i};
-      line-height: 1.35${i};
+      line-height: 1.45${i};
       text-align: center${i};
       text-indent: 0${i};
-      color: #0c0a09${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
       word-break: keep-all${i};
+      color: #0c0a09${i};
     }
     .${chapterBodyClass} {
       padding-top: 0${i};
