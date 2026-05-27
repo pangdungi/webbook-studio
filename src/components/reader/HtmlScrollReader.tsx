@@ -51,7 +51,10 @@ type Props = {
   /** localStorage 키 접미사 — 독자 token 또는 preview:bookId */
   progressStorageKey?: string;
   onTocReady?: (toc: ReaderTocEntry[]) => void;
+  /** 본문 탭 — 메뉴 열기/닫기만 (스크롤·레이아웃 변경 없음) */
   onReadingAreaTap?: () => void;
+  /** 상단 메뉴(크롬) 열림 — true일 때 스크롤·resize 무시 */
+  menuOpen?: boolean;
 };
 
 function getSlides(surface: HTMLElement) {
@@ -73,6 +76,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       progressStorageKey,
       onTocReady,
       onReadingAreaTap,
+      menuOpen = false,
     },
     ref,
   ) {
@@ -87,8 +91,10 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const lastPaginatedWidthRef = useRef(0);
     /** 탭·주소창 resize 시 --wbs-reader-vh 변동 방지 (스플래시 높이 줄며 scroll 튐) */
     const lockedScrollVhRef = useRef(0);
+    const menuOpenRef = useRef(menuOpen);
     const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    menuOpenRef.current = menuOpen;
     onReadingAreaTapRef.current = onReadingAreaTap;
     const sourceBodyHtmlRef = useRef(bodyHtml);
     sourceBodyHtmlRef.current = bodyHtml;

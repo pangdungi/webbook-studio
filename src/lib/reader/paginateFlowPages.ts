@@ -226,7 +226,41 @@ function splitBodyOnAnchor(
 
 function isFlowAnchor(anchor: HTMLElement): boolean {
   if (/-r\d+$/.test(anchor.id)) return false;
+  if (/-p\d+$/.test(anchor.id)) {
+    return !!anchor.querySelector(`.${bookPageShellFlowClass}`);
+  }
   return !!anchor.querySelector(`.${bookPageShellFlowClass}`);
+}
+
+/** 장 앵커(wbs-ch) — 표지·프롤로그·본문 shell을 슬라이드별로 펼침 (첫 flow만 쓰던 문제 방지) */
+function expandAnchorsWithMultipleShells(surface: HTMLElement): void {
+  const anchors = Array.from(
+    surface.querySelectorAll<HTMLElement>(":scope > .reader-scroll-anchor"),
+  );
+
+  for (const anchor of anchors) {
+    const shells = Array.from(
+      anchor.querySelectorAll<HTMLElement>(`:scope > .${bookPageShellClass}`),
+    );
+    if (shells.length <= 1) continue;
+
+    const parent = anchor.parentElement;
+    if (!parent) continue;
+
+    const baseId = anchor.id || `wbs-page-${Math.random().toString(36).slice(2, 9)}`;
+    const fragment = document.createDocumentFragment();
+
+    shells.forEach((shell, idx) => {
+      const slide = document.createElement("div");
+      slide.className = "reader-scroll-anchor";
+      slide.id = idx === 0 ? baseId : `${baseId}-p${idx}`;
+      slide.innerHTML = shell.outerHTML;
+      fragment.appendChild(slide);
+    });
+
+    parent.insertBefore(fragment, anchor);
+    anchor.remove();
+  }
 }
 
 export function paginateFlowPagesInSurface(
@@ -234,6 +268,8 @@ export function paginateFlowPagesInSurface(
   layout: PaginateLayout,
 ): void {
   if (layout.pageWidth <= 0 || layout.pageHeight <= 0) return;
+
+  expandAnchorsWithMultipleShells(surface);
 
   const anchors = Array.from(
     surface.querySelectorAll<HTMLElement>(":scope > .reader-scroll-anchor"),

@@ -28,9 +28,6 @@ import {
   type ReaderViewMode,
 } from "@/lib/reader/viewMode";
 
-const PAGINATED_HINT =
-  "페이지 모드 — 출판 책처럼 화면 한 장씩 넘깁니다. 이어서 읽기는 스크롤 모드를 이용하세요.";
-
 type Props = {
   epubUrl: string;
   title: string;
@@ -54,7 +51,6 @@ export function WebBookReader({
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
   const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
   const [chromeOpen, setChromeOpen] = useState(false);
-  const [showPaginatedHint, setShowPaginatedHint] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [toc, setToc] = useState<NavItem[]>([]);
   const readerNavRef = useRef<HtmlScrollReaderHandle | null>(null);
@@ -76,9 +72,6 @@ export function WebBookReader({
   const changeViewMode = (mode: ReaderViewMode) => {
     setViewMode(mode);
     saveReaderViewMode(mode);
-    if (mode === "paginated") {
-      setShowPaginatedHint(true);
-    }
   };
 
   const changeFontScale = (scale: ReaderFontScale) => {
@@ -286,10 +279,6 @@ export function WebBookReader({
               setTocOpen(true);
               setChromeOpen(false);
             }}
-            paginatedHint={
-              showPaginatedHint && viewMode === "paginated" ? PAGINATED_HINT : null
-            }
-            onDismissPaginatedHint={() => setShowPaginatedHint(false)}
           />
         </div>
       </div>

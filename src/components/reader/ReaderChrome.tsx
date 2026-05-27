@@ -31,8 +31,6 @@ type Props = {
   fontScale: ReaderFontScale;
   onFontScale: (scale: ReaderFontScale) => void;
   onOpenToc: () => void;
-  paginatedHint?: string | null;
-  onDismissPaginatedHint?: () => void;
 };
 
 function ChromeIconButton({
@@ -73,8 +71,6 @@ export function ReaderChrome({
   fontScale,
   onFontScale,
   onOpenToc,
-  paginatedHint,
-  onDismissPaginatedHint,
 }: Props) {
   if (!open) return null;
 
@@ -145,21 +141,6 @@ export function ReaderChrome({
               );
             })}
           </div>
-
-          {paginatedHint && (
-            <p className="mt-3 rounded-lg bg-amber-50 px-2 py-2 text-[11px] leading-snug text-amber-950">
-              {paginatedHint}
-              {onDismissPaginatedHint && (
-                <button
-                  type="button"
-                  onClick={onDismissPaginatedHint}
-                  className="mt-1 block text-amber-800 underline"
-                >
-                  닫기
-                </button>
-              )}
-            </p>
-          )}
         </div>
       </div>
     </>

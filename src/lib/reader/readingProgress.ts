@@ -19,7 +19,10 @@ function storageKey(progressKey: string) {
 }
 
 export function baseAnchorId(slideOrAnchorId: string): string {
-  return slideOrAnchorId.replace(/-r\d+$/, "") || slideOrAnchorId;
+  return (
+    slideOrAnchorId.replace(/-r\d+$/, "").replace(/-p\d+$/, "") ||
+    slideOrAnchorId
+  );
 }
 
 export function loadReadingProgress(
@@ -93,7 +96,10 @@ export function resolveSlideIndex(
   if (exact >= 0) return exact;
 
   const split = slides.findIndex(
-    (s) => s.id === progress.anchorId || s.id.startsWith(`${anchor}-r`),
+    (s) =>
+      s.id === progress.anchorId ||
+      s.id.startsWith(`${anchor}-r`) ||
+      s.id.startsWith(`${anchor}-p`),
   );
   if (split >= 0) return split;
 
