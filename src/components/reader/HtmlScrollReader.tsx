@@ -80,7 +80,11 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const surfaceRef = useRef<HTMLDivElement>(null);
     const pageIndexRef = useRef(0);
     const restoredOnceRef = useRef(false);
+    const scrollLayoutReadyRef = useRef(false);
+    const lastPaginatedWidthRef = useRef(0);
+    const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    onReadingAreaTapRef.current = onReadingAreaTap;
     const sourceBodyHtmlRef = useRef(bodyHtml);
     sourceBodyHtmlRef.current = bodyHtml;
     const paginated = viewMode === "paginated";
@@ -290,11 +294,18 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       }
 
       if (paginated) {
-        runPaginatedLayout();
+        if (w !== lastPaginatedWidthRef.current) {
+          lastPaginatedWidthRef.current = w;
+          runPaginatedLayout();
+        }
         return;
       }
 
       if (h <= 0) return;
+
+      const scrollTopToPreserve = scrollLayoutReadyRef.current
+        ? viewport.scrollTop
+        : null;
 
       viewport.style.backgroundColor = "#ffffff";
       viewport.style.removeProperty(READER_SLIDE_W_VAR);
@@ -314,13 +325,21 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       applyScrollFullBleedLayout(surface, w);
 
-      if (progressStorageKey && !restoredOnceRef.current) {
-        const saved = loadReadingProgress(progressStorageKey);
-        restoredOnceRef.current = true;
-        if (saved) {
-          requestAnimationFrame(() => restoreScrollProgress(saved));
+      const finishScrollLayout = () => {
+        if (scrollTopToPreserve !== null) {
+          viewport.scrollTop = scrollTopToPreserve;
+        } else if (progressStorageKey && !restoredOnceRef.current) {
+          const saved = loadReadingProgress(progressStorageKey);
+          restoredOnceRef.current = true;
+          if (saved) restoreScrollProgress(saved);
         }
-      }
+        scrollLayoutReadyRef.current = true;
+      };
+
+      requestAnimationFrame(() => {
+        finishScrollLayout();
+        requestAnimationFrame(finishScrollLayout);
+      });
     }, [
       paginated,
       applyPaginatedSlide,
@@ -383,6 +402,8 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
     useEffect(() => {
       restoredOnceRef.current = false;
+      scrollLayoutReadyRef.current = false;
+      lastPaginatedWidthRef.current = 0;
       if (!progressStorageKey) pageIndexRef.current = 0;
     }, [bodyHtml, viewMode, progressStorageKey]);
 
@@ -412,7 +433,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      const onTap = () => onReadingAreaTap?.();
+      const onTap = () => onReadingAreaTapRef.current?.();
       const detachTap = attachReadingSurfaceTap(viewport, onTap);
 
       syncLayout();
@@ -423,7 +444,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         detachTap();
         ro.disconnect();
       };
-    }, [bodyHtml, protectContent, onReadingAreaTap, syncLayout]);
+    }, [bodyHtml, protectContent, syncLayout]);
 
     useEffect(() => {
       syncLayout();
