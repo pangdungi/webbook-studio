@@ -23,6 +23,8 @@ const FONT_ICONS = {
 type Props = {
   title: string;
   open: boolean;
+  /** true — 독자 영역 안 absolute (iOS fixed 메뉴 시 scroll 튐 방지) */
+  contained?: boolean;
   onClose: () => void;
   viewMode: ReaderViewMode;
   onViewMode: (mode: ReaderViewMode) => void;
@@ -64,6 +66,7 @@ function ChromeIconButton({
 export function ReaderChrome({
   title,
   open,
+  contained = false,
   onClose,
   viewMode,
   onViewMode,
@@ -75,17 +78,19 @@ export function ReaderChrome({
 }: Props) {
   if (!open) return null;
 
+  const overlayPos = contained ? "absolute" : "fixed";
+
   return (
     <>
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 z-40 bg-stone-900/30"
+        className={`pointer-events-none ${overlayPos} inset-0 z-40 bg-stone-900/30`}
       />
 
       <div
         role="dialog"
         aria-label="읽기 설정"
-        className="pointer-events-auto fixed inset-x-0 bottom-0 z-50 px-3"
+        className={`pointer-events-auto ${overlayPos} inset-x-0 bottom-0 z-50 px-3`}
         style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
       >
         <div className="mx-auto max-w-lg rounded-2xl bg-white/98 p-4 shadow-xl ring-1 ring-stone-200/90 backdrop-blur-sm">

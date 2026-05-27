@@ -143,24 +143,6 @@ export function WebBookReader({
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <ReaderChrome
-          title={title}
-          open={chromeOpen}
-          onClose={() => setChromeOpen(false)}
-          viewMode={viewMode}
-          onViewMode={changeViewMode}
-          fontScale={fontScale}
-          onFontScale={changeFontScale}
-          onOpenToc={() => {
-            setTocOpen(true);
-            setChromeOpen(false);
-          }}
-          paginatedHint={
-            showPaginatedHint && viewMode === "paginated" ? PAGINATED_HINT : null
-          }
-          onDismissPaginatedHint={() => setShowPaginatedHint(false)}
-        />
-
         {tocOpen && toc.length > 0 && (
           <>
             <button
@@ -238,7 +220,6 @@ export function WebBookReader({
               fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
               progressStorageKey={progressStorageKey}
-              readerChromeOpen={chromeOpen}
               onTocReady={handleTocReady}
               onReadingAreaTap={handleReadingAreaTap}
             />
@@ -264,6 +245,25 @@ export function WebBookReader({
               </button>
             </>
           )}
+
+          <ReaderChrome
+            contained
+            title={title}
+            open={chromeOpen}
+            onClose={() => setChromeOpen(false)}
+            viewMode={viewMode}
+            onViewMode={changeViewMode}
+            fontScale={fontScale}
+            onFontScale={changeFontScale}
+            onOpenToc={() => {
+              setTocOpen(true);
+              setChromeOpen(false);
+            }}
+            paginatedHint={
+              showPaginatedHint && viewMode === "paginated" ? PAGINATED_HINT : null
+            }
+            onDismissPaginatedHint={() => setShowPaginatedHint(false)}
+          />
         </div>
       </div>
     </div>

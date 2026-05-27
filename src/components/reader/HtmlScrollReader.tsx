@@ -50,8 +50,6 @@ type Props = {
   protectContent?: boolean;
   /** localStorage 키 접미사 — 독자 token 또는 preview:bookId */
   progressStorageKey?: string;
-  /** 메뉴(크롬) 열림 — 모바일에서 레이아웃 변동 후 스크롤 복원 */
-  readerChromeOpen?: boolean;
   onTocReady?: (toc: ReaderTocEntry[]) => void;
   onReadingAreaTap?: () => void;
 };
@@ -73,7 +71,6 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       fontSizePercent = "100%",
       protectContent = false,
       progressStorageKey,
-      readerChromeOpen = false,
       onTocReady,
       onReadingAreaTap,
     },
@@ -85,12 +82,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const restoredOnceRef = useRef(false);
     const scrollLayoutReadyRef = useRef(false);
     const lastKnownScrollTopRef = useRef(0);
-    const menuLockUntilRef = useRef(0);
     const forceScrollRelayoutRef = useRef(true);
     const lastScrollLayoutWidthRef = useRef(0);
     const lastPaginatedWidthRef = useRef(0);
-    const readerChromeOpenRef = useRef(readerChromeOpen);
-    readerChromeOpenRef.current = readerChromeOpen;
     const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     onReadingAreaTapRef.current = onReadingAreaTap;
@@ -289,33 +283,10 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       applyPaginatedSlide(pageIndexRef.current, false);
     }, [applyPaginatedSlide, fontSizePercent, progressStorageKey]);
 
-    const lockScrollForMenu = useCallback(() => {
-      const viewport = viewportRef.current;
-      if (!viewport || paginated) return;
-      menuLockUntilRef.current = Date.now() + 2000;
-      viewport.dataset.wbsMenuScrollLock = String(viewport.scrollTop);
-      viewport.style.overflow = "hidden";
-      viewport.style.touchAction = "none";
-    }, [paginated]);
-
-    const unlockScrollForMenu = useCallback(() => {
-      const viewport = viewportRef.current;
-      if (!viewport?.dataset.wbsMenuScrollLock) return;
-      const top = Number(viewport.dataset.wbsMenuScrollLock);
-      delete viewport.dataset.wbsMenuScrollLock;
-      viewport.style.overflow = "";
-      viewport.style.touchAction = "";
-      viewport.scrollTop = top;
-      lastKnownScrollTopRef.current = top;
-    }, []);
-
     const syncLayout = useCallback(() => {
       const viewport = viewportRef.current;
       const surface = surfaceRef.current;
       if (!viewport || !surface) return;
-
-      if (Date.now() < menuLockUntilRef.current) return;
-      if (readerChromeOpenRef.current) return;
 
       const w = viewport.clientWidth;
       const h = viewport.clientHeight;
@@ -437,7 +408,6 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       scrollLayoutReadyRef.current = false;
       forceScrollRelayoutRef.current = true;
       lastKnownScrollTopRef.current = 0;
-      menuLockUntilRef.current = 0;
       lastScrollLayoutWidthRef.current = 0;
       lastPaginatedWidthRef.current = 0;
       if (!progressStorageKey) pageIndexRef.current = 0;
@@ -474,12 +444,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      const onTap = () => {
-        if (!paginated && !readerChromeOpenRef.current) {
-          lockScrollForMenu();
-        }
-        onReadingAreaTapRef.current?.();
-      };
+      const onTap = () => onReadingAreaTapRef.current?.();
       const detachTap = attachReadingSurfaceTap(viewport, onTap);
 
       syncLayout();
@@ -503,7 +468,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         detachTap();
         window.removeEventListener("resize", onWindowResize);
       };
-    }, [bodyHtml, paginated, protectContent, syncLayout, lockScrollForMenu]);
+    }, [bodyHtml, paginated, protectContent, syncLayout]);
 
     useEffect(() => {
       syncLayout();
@@ -522,11 +487,6 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         flush();
       };
     }, [bodyHtml, viewMode, persistProgress, progressStorageKey]);
-
-    useEffect(() => {
-      if (readerChromeOpen || paginated) return;
-      unlockScrollForMenu();
-    }, [readerChromeOpen, paginated, unlockScrollForMenu]);
 
     useEffect(() => {
       if (!progressStorageKey || paginated) return;

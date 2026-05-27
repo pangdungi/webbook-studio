@@ -21,6 +21,10 @@ function anchorId(prefix: string, pageId: string) {
   return `wbs-${prefix}-${pageId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
+function chapterAnchorId(chapterId: string) {
+  return `wbs-ch-${chapterId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
+}
+
 function wrapAnchor(id: string, html: string) {
   return `<div id="${id}" class="reader-scroll-anchor">${html}</div>`;
 }
@@ -54,15 +58,26 @@ export function buildBookScrollDocument(
       chapter.content_html,
     );
 
-    for (const page of parsed.pages) {
-      const id = anchorId(chapter.id, page.id);
-      const pageHtml = buildPageEpubHtml(page, chapter.title);
-      pages.push({ id, html: pageHtml });
-      parts.push(wrapAnchor(id, pageHtml));
+    const chapterId = chapterAnchorId(chapter.id);
+    const chapterParts: string[] = [];
+    let tocAdded = false;
 
-      if (page.kind === "chapter-cover") {
-        toc.push({ label: chapter.title.trim() || "장", href: id });
+    for (const page of parsed.pages) {
+      const pageHtml = buildPageEpubHtml(page, chapter.title);
+      chapterParts.push(pageHtml);
+      pages.push({
+        id: anchorId(chapter.id, page.id),
+        html: pageHtml,
+      });
+
+      if (!tocAdded && page.kind === "chapter-cover") {
+        toc.push({ label: chapter.title.trim() || "장", href: chapterId });
+        tocAdded = true;
       }
+    }
+
+    if (chapterParts.length > 0) {
+      parts.push(wrapAnchor(chapterId, chapterParts.join("\n")));
     }
   }
 
