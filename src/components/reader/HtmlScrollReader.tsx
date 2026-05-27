@@ -85,7 +85,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const restoredOnceRef = useRef(false);
     const scrollLayoutReadyRef = useRef(false);
     const lastKnownScrollTopRef = useRef(0);
-    const pinnedScrollTopRef = useRef<number | null>(null);
+    const menuLockUntilRef = useRef(0);
     const forceScrollRelayoutRef = useRef(true);
     const lastScrollLayoutWidthRef = useRef(0);
     const lastPaginatedWidthRef = useRef(0);
@@ -289,10 +289,33 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       applyPaginatedSlide(pageIndexRef.current, false);
     }, [applyPaginatedSlide, fontSizePercent, progressStorageKey]);
 
+    const lockScrollForMenu = useCallback(() => {
+      const viewport = viewportRef.current;
+      if (!viewport || paginated) return;
+      menuLockUntilRef.current = Date.now() + 2000;
+      viewport.dataset.wbsMenuScrollLock = String(viewport.scrollTop);
+      viewport.style.overflow = "hidden";
+      viewport.style.touchAction = "none";
+    }, [paginated]);
+
+    const unlockScrollForMenu = useCallback(() => {
+      const viewport = viewportRef.current;
+      if (!viewport?.dataset.wbsMenuScrollLock) return;
+      const top = Number(viewport.dataset.wbsMenuScrollLock);
+      delete viewport.dataset.wbsMenuScrollLock;
+      viewport.style.overflow = "";
+      viewport.style.touchAction = "";
+      viewport.scrollTop = top;
+      lastKnownScrollTopRef.current = top;
+    }, []);
+
     const syncLayout = useCallback(() => {
       const viewport = viewportRef.current;
       const surface = surfaceRef.current;
       if (!viewport || !surface) return;
+
+      if (Date.now() < menuLockUntilRef.current) return;
+      if (readerChromeOpenRef.current) return;
 
       const w = viewport.clientWidth;
       const h = viewport.clientHeight;
@@ -314,19 +337,12 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       if (h <= 0) return;
 
-      if (readerChromeOpenRef.current) return;
-
       const layoutW = Math.round(w);
       if (scrollLayoutReadyRef.current && !forceScrollRelayoutRef.current) {
         return;
       }
       forceScrollRelayoutRef.current = false;
       lastScrollLayoutWidthRef.current = layoutW;
-
-      const scrollTopToPreserve =
-        scrollLayoutReadyRef.current || lastKnownScrollTopRef.current > 0
-          ? lastKnownScrollTopRef.current
-          : null;
 
       viewport.style.backgroundColor = "#ffffff";
       viewport.style.removeProperty(READER_SLIDE_W_VAR);
@@ -347,10 +363,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       applyScrollFullBleedLayout(surface, w);
 
       const finishScrollLayout = () => {
-        if (scrollTopToPreserve !== null && scrollTopToPreserve > 0) {
-          viewport.scrollTop = scrollTopToPreserve;
-          lastKnownScrollTopRef.current = scrollTopToPreserve;
-        } else if (progressStorageKey && !restoredOnceRef.current) {
+        if (progressStorageKey && !restoredOnceRef.current) {
           const saved = loadReadingProgress(progressStorageKey);
           restoredOnceRef.current = true;
           if (saved) restoreScrollProgress(saved);
@@ -358,11 +371,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         scrollLayoutReadyRef.current = true;
       };
 
-      requestAnimationFrame(() => {
-        finishScrollLayout();
-        requestAnimationFrame(finishScrollLayout);
-        setTimeout(finishScrollLayout, 0);
-      });
+      requestAnimationFrame(finishScrollLayout);
     }, [
       paginated,
       applyPaginatedSlide,
@@ -428,7 +437,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       scrollLayoutReadyRef.current = false;
       forceScrollRelayoutRef.current = true;
       lastKnownScrollTopRef.current = 0;
-      pinnedScrollTopRef.current = null;
+      menuLockUntilRef.current = 0;
       lastScrollLayoutWidthRef.current = 0;
       lastPaginatedWidthRef.current = 0;
       if (!progressStorageKey) pageIndexRef.current = 0;
@@ -466,10 +475,8 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       if (!viewport) return;
 
       const onTap = () => {
-        if (!paginated) {
-          const top = viewport.scrollTop;
-          lastKnownScrollTopRef.current = top;
-          pinnedScrollTopRef.current = top;
+        if (!paginated && !readerChromeOpenRef.current) {
+          lockScrollForMenu();
         }
         onReadingAreaTapRef.current?.();
       };
@@ -496,7 +503,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         detachTap();
         window.removeEventListener("resize", onWindowResize);
       };
-    }, [bodyHtml, paginated, protectContent, syncLayout]);
+    }, [bodyHtml, paginated, protectContent, syncLayout, lockScrollForMenu]);
 
     useEffect(() => {
       syncLayout();
@@ -516,50 +523,10 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       };
     }, [bodyHtml, viewMode, persistProgress, progressStorageKey]);
 
-    const applyPinnedScroll = useCallback(() => {
-      const viewport = viewportRef.current;
-      if (!viewport || paginated) return;
-      const top = pinnedScrollTopRef.current ?? lastKnownScrollTopRef.current;
-      if (top <= 0) return;
-      viewport.scrollTop = top;
-      lastKnownScrollTopRef.current = top;
-    }, [paginated]);
-
     useEffect(() => {
-      if (!readerChromeOpen || paginated) return;
-
-      applyPinnedScroll();
-      const viewport = viewportRef.current;
-      if (!viewport) return;
-
-      const pin = pinnedScrollTopRef.current ?? lastKnownScrollTopRef.current;
-      if (pin <= 0) return;
-
-      const guard = () => {
-        if (viewport.scrollTop !== pin) viewport.scrollTop = pin;
-      };
-
-      guard();
-      const interval = window.setInterval(guard, 32);
-      const raf1 = requestAnimationFrame(guard);
-      const raf2 = requestAnimationFrame(() => requestAnimationFrame(guard));
-      const t1 = window.setTimeout(guard, 50);
-      const t2 = window.setTimeout(guard, 200);
-      const vv = window.visualViewport;
-      vv?.addEventListener("resize", guard);
-      vv?.addEventListener("scroll", guard);
-
-      return () => {
-        clearInterval(interval);
-        cancelAnimationFrame(raf1);
-        cancelAnimationFrame(raf2);
-        clearTimeout(t1);
-        clearTimeout(t2);
-        vv?.removeEventListener("resize", guard);
-        vv?.removeEventListener("scroll", guard);
-        pinnedScrollTopRef.current = null;
-      };
-    }, [readerChromeOpen, paginated, applyPinnedScroll]);
+      if (readerChromeOpen || paginated) return;
+      unlockScrollForMenu();
+    }, [readerChromeOpen, paginated, unlockScrollForMenu]);
 
     useEffect(() => {
       if (!progressStorageKey || paginated) return;
