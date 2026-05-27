@@ -1,3 +1,5 @@
+import type { NextResponse } from "next/server";
+
 /** 독자 링크로 들어온 세션 — 플랫폼 경로 차단용 */
 
 export const READER_SESSION_COOKIE = "wbs_reader_token";
@@ -12,6 +14,13 @@ export function readerCookieOptions(secure: boolean) {
     path: "/",
     maxAge: READER_COOKIE_MAX_AGE,
   };
+}
+
+export function clearReaderSessionCookie(response: NextResponse, secure: boolean) {
+  response.cookies.set(READER_SESSION_COOKIE, "", {
+    ...readerCookieOptions(secure),
+    maxAge: 0,
+  });
 }
 
 /** /read/abc123 또는 /read/abc123/ */

@@ -3,13 +3,17 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import {
   READER_SESSION_COOKIE,
+  clearReaderSessionCookie,
   isReaderAllowedPath,
   isReaderPathForToken,
   parseReaderTokenFromPath,
   readerBookPath,
   readerCookieOptions,
 } from "@/lib/access/readerSession";
-import { isReaderOnlyHost } from "@/lib/utils/siteUrls";
+import {
+  isReaderOnlyHost,
+  isStudioPlatformPath,
+} from "@/lib/utils/siteUrls";
 
 async function getProfileRole(
   supabase: ReturnType<typeof createServerClient>,
@@ -103,12 +107,21 @@ export async function middleware(request: NextRequest) {
       (pathname.startsWith("/api/") && !pathname.startsWith("/api/read"));
 
     if (onPlatform) {
-      supabaseResponse.cookies.delete(READER_SESSION_COOKIE);
+      clearReaderSessionCookie(supabaseResponse, secure);
     }
   }
 
+  /*
+   * 스튜디오 도메인(webbook-studio.vercel.app): /·/admin 등에서는 독자 잠금 없음.
+   * 독자 잠금은 독자 전용 도메인 또는 /read/... 경로에서만.
+   */
+  const readerLockActive =
+    readerOnlySite || pathname.startsWith("/read/");
+
+  if (!readerOnlySite && isStudioPlatformPath(pathname) && readerToken) {
+    clearReaderSessionCookie(supabaseResponse, secure);
+  } else if (readerLockActive && readerToken && !isAdmin) {
   /* 독자: /read/본인토큰·epub·정적 파일만, 나머지는 책으로 되돌림 */
-  if (readerToken && !isAdmin) {
     if (pathname.startsWith("/api/")) {
       return redirectToReaderBook(request, readerToken);
     }

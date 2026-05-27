@@ -57,3 +57,12 @@ export function isReaderOnlyHost(hostname: string): boolean {
   if (readerHost === studioHost) return false;
   return hostname.toLowerCase() === readerHost;
 }
+
+export function isStudioPlatformPath(pathname: string): boolean {
+  return (
+    pathname === "/" ||
+    pathname.startsWith("/admin") ||
+    pathname === "/login" ||
+    pathname === "/signup"
+  );
+}
