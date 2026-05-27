@@ -2,7 +2,11 @@ import Epub from "epub-gen-memory";
 import type { Book, Chapter, WritingMode } from "@/lib/types/database";
 import { markTocNonLinear } from "@/lib/epub/postProcess";
 import { parseChapterContent } from "@/lib/pages/content";
-import { buildPageEpubHtml } from "@/lib/typography/pageLayout";
+import {
+  buildBookCoverEpubHtml,
+  buildPageEpubHtml,
+} from "@/lib/typography/pageLayout";
+import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import { epubTypographyCss } from "@/lib/typography/bookStyles";
 
@@ -25,27 +29,50 @@ function contentPageNumber(
 }
 
 export async function buildEpubBuffer(
-  book: Pick<Book, "title" | "subtitle" | "writing_mode" | "cover_path" | "heading_fonts">,
+  book: Pick<
+    Book,
+    | "title"
+    | "subtitle"
+    | "writing_mode"
+    | "cover_path"
+    | "cover_bg_color"
+    | "cover_title_color"
+    | "heading_fonts"
+  >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
   coverUrl?: string | null,
 ): Promise<Buffer> {
   const headingFonts = normalizeBookHeadingFonts(book.heading_fonts);
+  const coverStyle = normalizeBookCoverStyle(book);
   const css = epubTypographyCss(writingModeCss(book.writing_mode), headingFonts);
 
-  const content = chapters.flatMap((ch) => {
-    const parsed = parseChapterContent(ch.content_json, ch.title, ch.content_html);
+  const bookCoverEntry = {
+    title: "표지",
+    content: buildBookCoverEpubHtml(book.title, book.subtitle, coverStyle),
+    excludeFromToc: false,
+  };
 
-    return parsed.pages.map((page) => ({
-      title:
-        page.kind === "chapter-cover"
-          ? ch.title
-          : page.kind === "quote"
-            ? `${ch.title} 명언`
-            : `${ch.title} ${contentPageNumber(parsed.pages, page.id)}`,
-      content: buildPageEpubHtml(page, ch.title),
-      excludeFromToc: page.kind !== "chapter-cover",
-    }));
-  });
+  const content = [
+    bookCoverEntry,
+    ...chapters.flatMap((ch) => {
+      const parsed = parseChapterContent(
+        ch.content_json,
+        ch.title,
+        ch.content_html,
+      );
+
+      return parsed.pages.map((page) => ({
+        title:
+          page.kind === "chapter-cover"
+            ? ch.title
+            : page.kind === "quote"
+              ? `${ch.title} 명언`
+              : `${ch.title} ${contentPageNumber(parsed.pages, page.id)}`,
+        content: buildPageEpubHtml(page, ch.title),
+        excludeFromToc: page.kind !== "chapter-cover",
+      }));
+    }),
+  ];
 
   const options = {
     title: book.title,

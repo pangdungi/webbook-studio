@@ -1,0 +1,24 @@
+---
+description: Webbook Studio는 출판 CMS 단독 프로젝트 — 다른 앱 코드 금지
+alwaysApply: true
+---
+
+# Webbook Studio 전용
+
+이 저장소는 **웹북 출판 플랫폼(Webbook Studio)** 만 다룬다.
+
+## 절대 금지
+
+- `reading-meditation`, 명상, library, meditation, `library_books`, `meditation_guides` 관련 코드·라우트·API·마이그레이션을 이 repo에 추가·복사·병합하지 말 것
+- 다른 앱(독서노트 명상 등) 설정·Supabase 프로젝트·env를 webbook과 섞지 말 것
+- 사용자가 webbook 작업을 요청할 때 다른 앱을 제안하거나 열지 말 것
+
+## 이 프로젝트 범위
+
+- 관리자: `/`, `/admin`, `/login` — TipTap 편집, EPUB 출판, 매직링크
+- 독자: `/read/[token]`
+- Supabase: `books`, `chapters`, `profiles`, `book_access_tokens` 등 웹북 스키마만
+
+## 다른 앱
+
+명상/라이브러리 앱은 **별도 폴더** `~/Projects/reading-meditation` 에서만 작업한다. webbook-studio 워크스페이스에서는 언급·이동·파일 열기를 하지 않는다.

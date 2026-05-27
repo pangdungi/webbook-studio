@@ -31,12 +31,14 @@ type ContainerSize = { width: number; height: number };
 const SIZE_SETTLE_MS = 100;
 const HEIGHT_REMOUNT_DELTA = 40;
 
-function firstChapterHref(book: Book): string | undefined {
+/** spine 첫 본문(표지·1장) — toc.xhtml 제외 */
+function firstSpineContentHref(book: Book): string | undefined {
   let href: string | undefined;
-  book.spine.each((item: { href: string }) => {
-    if (!href && !/toc\.xhtml/i.test(item.href)) {
-      href = item.href;
-    }
+  book.spine.each((item: { href: string; linear?: string }) => {
+    if (href) return;
+    if (/toc\.xhtml/i.test(item.href)) return;
+    if (item.linear === "no") return;
+    href = item.href;
   });
   return href;
 }
@@ -322,7 +324,8 @@ export function EpubViewer({
         }
       });
 
-      const target = savedCfiRef.current ?? firstChapterHref(book) ?? toc[0]?.href;
+      const target =
+        savedCfiRef.current ?? firstSpineContentHref(book) ?? toc[0]?.href;
       if (target) {
         await rendition.display(target);
       } else {

@@ -16,6 +16,8 @@ export type Book = {
   title: string;
   subtitle: string | null;
   cover_path: string | null;
+  cover_bg_color: string;
+  cover_title_color: string;
   writing_mode: WritingMode;
   heading_fonts: BookHeadingFonts;
   status: BookStatus;

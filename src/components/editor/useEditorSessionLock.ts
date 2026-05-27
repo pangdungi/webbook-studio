@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 const LOCK_TTL_MS = 6000;
 const HEARTBEAT_MS = 2000;
@@ -8,6 +8,7 @@ const HEARTBEAT_MS = 2000;
 type LockRecord = { tabId: string; ts: number };
 
 function getTabId() {
+  if (typeof window === "undefined") return "";
   const key = "webbook-studio-tab-id";
   let id = sessionStorage.getItem(key);
   if (!id) {
@@ -17,11 +18,19 @@ function getTabId() {
   return id;
 }
 
+function ensureTabId(tabIdRef: RefObject<string | null>) {
+  if (!tabIdRef.current) {
+    tabIdRef.current = getTabId();
+  }
+  return tabIdRef.current;
+}
+
 function lockStorageKey(bookId: string) {
   return `webbook-studio-editor-lock:${bookId}`;
 }
 
 function readLock(bookId: string): LockRecord | null {
+  if (typeof window === "undefined") return null;
   try {
     const raw = localStorage.getItem(lockStorageKey(bookId));
     if (!raw) return null;
@@ -40,14 +49,15 @@ function isLockHeldByOther(bookId: string, tabId: string): boolean {
 
 /** 책당 편집기 탭 하나 — 다른 탭이 열려 있으면 blocked */
 export function useEditorSessionLock(bookId: string) {
-  const tabIdRef = useRef(getTabId());
+  const tabIdRef = useRef<string | null>(null);
   const ownsLockRef = useRef(false);
   const [status, setStatus] = useState<"checking" | "active" | "blocked">(
     "checking",
   );
 
   const acquire = useCallback(() => {
-    const tabId = tabIdRef.current;
+    const tabId = ensureTabId(tabIdRef);
+    if (!tabId) return false;
     if (isLockHeldByOther(bookId, tabId)) {
       ownsLockRef.current = false;
       setStatus("blocked");
@@ -77,9 +87,11 @@ export function useEditorSessionLock(bookId: string) {
       acquire();
       return;
     }
+    const tabId = ensureTabId(tabIdRef);
+    if (!tabId) return;
     localStorage.setItem(
       lockStorageKey(bookId),
-      JSON.stringify({ tabId: tabIdRef.current, ts: Date.now() }),
+      JSON.stringify({ tabId, ts: Date.now() }),
     );
   }, [bookId, acquire]);
 

@@ -1,5 +1,10 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { LoginForm } from "@/components/auth/LoginForm";
+
+function LoginFormFallback() {
+  return <div className="h-48 animate-pulse rounded-lg bg-stone-100" aria-hidden />;
+}
 
 export default function LoginPage() {
   return (
@@ -13,7 +18,9 @@ export default function LoginPage() {
           작성 및 출판 기능은 관리자 계정만 사용할 수 있습니다.
         </p>
         <div className="mt-8">
-          <LoginForm />
+          <Suspense fallback={<LoginFormFallback />}>
+            <LoginForm />
+          </Suspense>
         </div>
       </div>
     </main>

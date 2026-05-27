@@ -4,6 +4,12 @@ import type { SpellCorrection } from "@/lib/types/database";
 
 export const SPELLCHECK_BLOCK_SEPARATOR = "\n";
 
+type DocBlockJson = {
+  type: string;
+  attrs?: Record<string, unknown>;
+  content?: { type: string; text: string }[];
+};
+
 /** getText와 동일한 규칙으로 global offset → doc position 매핑 */
 function buildCharToDocPosMap(doc: ProseMirrorNode): number[] {
   const map: number[] = [];
@@ -31,6 +37,24 @@ function buildCharToDocPosMap(doc: ProseMirrorNode): number[] {
 
 export function getEditorPlainText(editor: Editor) {
   return editor.getText({ blockSeparator: SPELLCHECK_BLOCK_SEPARATOR });
+}
+
+function textblockToJson(node: ProseMirrorNode, line: string): DocBlockJson {
+  const content = line.length > 0 ? [{ type: "text", text: line }] : [];
+
+  if (node.type.name === "heading") {
+    return {
+      type: "heading",
+      attrs: node.attrs as Record<string, unknown>,
+      content,
+    };
+  }
+
+  return {
+    type: "paragraph",
+    attrs: node.attrs as Record<string, unknown>,
+    content,
+  };
 }
 
 export function applyOneCorrectionToEditor(
@@ -84,7 +108,10 @@ export function applyAllCorrectionsToEditor(
   }
 }
 
-/** 교정된 전체 텍스트를 문단 단위로 반영 (이미지·제목 구조 유지) */
+/**
+ * 교정된 전체 텍스트를 문단 단위로 반영.
+ * 부분 replace 대신 doc JSON을 다시 조립해 첫 글자 중복(off-by-one)을 방지한다.
+ */
 export function applyCorrectedPlainTextToEditor(
   editor: Editor,
   correctedText: string,
@@ -93,36 +120,49 @@ export function applyCorrectedPlainTextToEditor(
   if (original === correctedText) return true;
 
   const correctedLines = correctedText.split("\n");
-  const updates: { from: number; to: number; text: string }[] = [];
+  const newContent: DocBlockJson[] = [];
   let lineIdx = 0;
+  let changed = false;
 
-  editor.state.doc.content.forEach((node, offset) => {
-    if (!node.isTextblock) return;
+  editor.state.doc.forEach((child) => {
+    if (child.isTextblock) {
+      const line = correctedLines[lineIdx] ?? "";
+      lineIdx += 1;
+      if (child.textContent !== line) changed = true;
+      newContent.push(textblockToJson(child, line));
+      return;
+    }
 
-    const newText = correctedLines[lineIdx] ?? "";
-    lineIdx += 1;
-    if (node.textContent === newText) return;
+    if (child.type.name === "image") {
+      newContent.push(child.toJSON() as DocBlockJson);
+      return;
+    }
 
-    const blockPos = offset + 1;
-    updates.push({
-      from: blockPos + 1,
-      to: blockPos + node.nodeSize - 1,
-      text: newText,
-    });
+    if (child.type.name === "horizontalRule") {
+      newContent.push({ type: "horizontalRule" });
+    }
   });
 
-  if (updates.length === 0) return false;
-
-  const { tr } = editor.state;
-  for (const update of updates.sort((a, b) => b.from - a.from)) {
-    if (update.text.length === 0) {
-      tr.delete(update.from, update.to);
-      continue;
-    }
-    tr.replaceWith(update.from, update.to, editor.schema.text(update.text));
+  while (lineIdx < correctedLines.length) {
+    const line = correctedLines[lineIdx] ?? "";
+    lineIdx += 1;
+    if (!line) continue;
+    changed = true;
+    newContent.push({
+      type: "paragraph",
+      attrs: { class: "book-body-p" },
+      content: [{ type: "text", text: line }],
+    });
   }
 
-  editor.view.dispatch(tr);
+  if (!changed) return false;
+
+  editor
+    .chain()
+    .focus()
+    .setContent({ type: "doc", content: newContent }, { emitUpdate: true })
+    .run();
+
   return true;
 }
 

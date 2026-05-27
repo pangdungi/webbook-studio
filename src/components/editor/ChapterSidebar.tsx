@@ -22,6 +22,8 @@ import type { Chapter } from "@/lib/types/database";
 type Props = {
   chapters: Chapter[];
   activeId: string;
+  bookCoverActive: boolean;
+  onSelectBookCover: () => void;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
@@ -123,6 +125,8 @@ function SortableChapter({
 export function ChapterSidebar({
   chapters,
   activeId,
+  bookCoverActive,
+  onSelectBookCover,
   onSelect,
   onAdd,
   onDelete,
@@ -166,6 +170,19 @@ export function ChapterSidebar({
           + 추가
         </button>
       </div>
+      <nav className="border-b border-stone-100 p-2">
+        <button
+          type="button"
+          onClick={onSelectBookCover}
+          className={`w-full rounded-lg px-3 py-2.5 text-left text-sm font-medium ${
+            bookCoverActive
+              ? "bg-stone-900 text-white"
+              : "bg-stone-50 text-stone-800 ring-1 ring-stone-200 hover:bg-stone-100"
+          }`}
+        >
+          책 표지
+        </button>
+      </nav>
       {dndReady ? (
         <DndContext
           sensors={sensors}
@@ -181,7 +198,7 @@ export function ChapterSidebar({
                 <SortableChapter
                   key={chapter.id}
                   chapter={chapter}
-                  active={chapter.id === activeId}
+                  active={chapter.id === activeId && !bookCoverActive}
                   onSelect={onSelect}
                   onDelete={onDelete}
                   onRename={onRename}
@@ -196,7 +213,7 @@ export function ChapterSidebar({
             <ChapterRow
               key={chapter.id}
               chapter={chapter}
-              active={chapter.id === activeId}
+              active={chapter.id === activeId && !bookCoverActive}
               onSelect={onSelect}
               onDelete={onDelete}
               onRename={onRename}

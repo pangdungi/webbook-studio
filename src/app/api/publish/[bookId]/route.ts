@@ -4,6 +4,7 @@ import { buildReaderUrl } from "@/lib/utils/tokens";
 import { ensurePrimaryReaderToken } from "@/lib/access/bookToken";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
@@ -53,6 +54,7 @@ export async function POST(_request: Request, context: RouteContext) {
   const epubBuffer = await buildEpubBuffer(
     {
       ...book,
+      ...normalizeBookCoverStyle(book),
       heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
     },
     chapters,

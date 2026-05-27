@@ -22,6 +22,7 @@ import type { BookPage, PageKind } from "@/lib/pages/types";
 import { quoteContentToHtml } from "@/lib/pages/quotePage";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
+import { WritingReviewPanel } from "./WritingReviewPanel";
 import type { SpellCorrection } from "@/lib/types/database";
 import {
   applyCorrectedPlainTextToEditor,
@@ -132,6 +133,15 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const [scannedLength, setScannedLength] = useState(0);
   const [spellError, setSpellError] = useState<string | null>(null);
   const [spellProvider, setSpellProvider] = useState<string | null>(null);
+
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [reviewProvider, setReviewProvider] = useState<string | null>(null);
+  const [reviewOriginal, setReviewOriginal] = useState("");
+  const [reviewRevised, setReviewRevised] = useState("");
+  const [reviewSummary, setReviewSummary] = useState("");
+  const [reviewScannedLength, setReviewScannedLength] = useState(0);
 
   const activeEditor = editorsRef.current.get(activePageId) ?? null;
 
@@ -387,12 +397,65 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     input.click();
   }, [activeEditor, bookId]);
 
+  const runWritingReview = useCallback(async () => {
+    const editor = activeEditor;
+    if (!editor) return;
+    const text = getEditorPlainText(editor);
+    setReviewOriginal(text);
+    setReviewScannedLength(text.length);
+    setReviewOpen(true);
+    setSpellOpen(false);
+    setReviewLoading(true);
+    setReviewError(null);
+    setReviewProvider(null);
+    setReviewRevised("");
+    setReviewSummary("");
+
+    try {
+      const res = await fetch("/api/writing-review", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setReviewError(data.error ?? "글검사에 실패했습니다.");
+        setReviewRevised(text);
+        return;
+      }
+
+      setReviewRevised(data.revisedText ?? text);
+      setReviewSummary(data.summary ?? "");
+      setReviewProvider(data.provider ?? null);
+    } catch {
+      setReviewError("네트워크 오류로 글검사에 실패했습니다.");
+      setReviewRevised(text);
+    } finally {
+      setReviewLoading(false);
+    }
+  }, [activeEditor]);
+
+  const applyWritingReview = useCallback(() => {
+    const editor = activeEditor;
+    if (!editor || !reviewRevised) return;
+    const ok = applyCorrectedPlainTextToEditor(editor, reviewRevised);
+    if (!ok) {
+      alert("다듬은 글을 적용하지 못했습니다. 글검사를 다시 실행해 주세요.");
+      return;
+    }
+    setReviewOpen(false);
+    setReviewRevised("");
+    setReviewSummary("");
+  }, [activeEditor, reviewRevised]);
+
   const runSpellcheck = useCallback(async () => {
     const editor = activeEditor;
     if (!editor) return;
     const text = getEditorPlainText(editor);
     setOriginalText(text);
     setScannedLength(text.length);
+    setReviewOpen(false);
     setSpellOpen(true);
     setSpellLoading(true);
     setSpellError(null);
@@ -574,8 +637,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           구분선
         </ToolbarButton>
         <div className="flex-1" />
+        <ToolbarButton disabled={!isContentPageActive} onClick={runWritingReview}>
+          글검사
+        </ToolbarButton>
         <ToolbarButton disabled={!isContentPageActive} onClick={runSpellcheck}>
-          맞춤법 검사
+          맞춤법
         </ToolbarButton>
       </div>
 
@@ -671,7 +737,21 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </div>
       </div>
 
-      {spellOpen && (
+      {reviewOpen && (
+        <WritingReviewPanel
+          originalText={reviewOriginal}
+          revisedText={reviewRevised}
+          summary={reviewSummary}
+          error={reviewError}
+          provider={reviewProvider}
+          loading={reviewLoading}
+          scannedLength={reviewScannedLength}
+          onApplyAll={applyWritingReview}
+          onClose={() => setReviewOpen(false)}
+        />
+      )}
+
+      {spellOpen && !reviewOpen && (
         <SpellcheckPanel
           corrections={corrections}
           correctedText={correctedText}

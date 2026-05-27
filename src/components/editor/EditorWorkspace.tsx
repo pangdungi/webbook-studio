@@ -2,8 +2,13 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { BookCoverEditor } from "@/components/editor/BookCoverEditor";
 import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
+import {
+  normalizeBookCoverStyle,
+  type BookCoverStyle,
+} from "@/lib/books/coverStyle";
 import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
 import type { Book, Chapter } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
@@ -29,8 +34,12 @@ export function EditorWorkspace({
   const router = useRouter();
   const [book, setBook] = useState(() => ({
     ...initialBook,
+    ...normalizeBookCoverStyle(initialBook),
     heading_fonts: normalizeBookHeadingFonts(initialBook.heading_fonts),
   }));
+  const [editorPanel, setEditorPanel] = useState<"book-cover" | "chapter">(
+    "chapter",
+  );
   const [chapters, setChapters] = useState(initialChapters);
   const [activeChapterId, setActiveChapterId] = useState(
     initialChapters[0]?.id ?? "",
@@ -133,6 +142,8 @@ export function EditorWorkspace({
         body: JSON.stringify({
           title: book.title,
           heading_fonts: book.heading_fonts,
+          cover_bg_color: book.cover_bg_color,
+          cover_title_color: book.cover_title_color,
         }),
       }).then(async (res) => {
         if (!res.ok) {
@@ -162,7 +173,15 @@ export function EditorWorkspace({
     } finally {
       setManualSaving(false);
     }
-  }, [book.title, book.heading_fonts, bookId, manualSaving, saveChapter]);
+  }, [
+    book.title,
+    book.heading_fonts,
+    book.cover_bg_color,
+    book.cover_title_color,
+    bookId,
+    manualSaving,
+    saveChapter,
+  ]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -259,6 +278,28 @@ export function EditorWorkspace({
       body: JSON.stringify({ heading_fonts }),
     });
   };
+
+  const updateCoverStyle = useCallback(
+    async (patch: Partial<BookCoverStyle>) => {
+      const next = normalizeBookCoverStyle({ ...book, ...patch });
+      setBook((b) => ({ ...b, ...next }));
+      await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+    },
+    [book, bookId],
+  );
+
+  const selectChapter = useCallback((id: string) => {
+    setEditorPanel("chapter");
+    setActiveChapterId(id);
+  }, []);
+
+  const selectBookCover = useCallback(() => {
+    setEditorPanel("book-cover");
+  }, []);
 
   const publish = async () => {
     setPublishing(true);
@@ -471,13 +512,25 @@ export function EditorWorkspace({
         <ChapterSidebar
           chapters={chapters}
           activeId={activeChapterId}
-          onSelect={setActiveChapterId}
+          bookCoverActive={editorPanel === "book-cover"}
+          onSelectBookCover={selectBookCover}
+          onSelect={selectChapter}
           onAdd={addChapter}
           onDelete={deleteChapter}
           onRename={renameChapter}
           onReorder={reorderChapters}
         />
-        {activeChapter && (
+        {editorPanel === "book-cover" ? (
+          <BookCoverEditor
+            title={book.title}
+            subtitle={book.subtitle}
+            cover={{
+              cover_bg_color: book.cover_bg_color,
+              cover_title_color: book.cover_title_color,
+            }}
+            onCoverChange={(patch) => void updateCoverStyle(patch)}
+          />
+        ) : activeChapter ? (
           <BookEditor
             ref={editorRef}
             key={activeChapter.id}
@@ -490,7 +543,7 @@ export function EditorWorkspace({
             onSave={saveChapter}
             onSaveState={setSaveState}
           />
-        )}
+        ) : null}
       </div>
     </div>
   );

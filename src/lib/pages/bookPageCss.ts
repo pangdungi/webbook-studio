@@ -10,6 +10,8 @@ export const bookPageClass = "book-page";
 export const bookPageBodyClass = "book-page__body";
 export const bookPageShellClass = "book-page-shell";
 export const bookPageCoverClass = "book-page--cover";
+export const bookPageBookCoverClass = "book-page--book-cover";
+export const bookBookTitleClass = "book-book-title";
 export const bookPageContentClass = "book-page--content";
 export const bookPageQuoteClass = "book-page--quote";
 export const bookChapterTitleClass = "book-chapter-title";
@@ -73,6 +75,42 @@ function pageBoxCss(p: string, important = false) {
       overflow-wrap: anywhere${i};
       word-break: keep-all${i};
       color: #0c0a09${i};
+    }
+    ${p}.${bookPageBookCoverClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: stretch${i};
+      justify-content: flex-start${i};
+      background-color: var(--book-cover-bg, #2d4a6f)${i};
+      padding: 5.5rem 2rem 2.5rem 3rem${i};
+    }
+    ${p}.${bookPageBookCoverClass} .${bookPageBodyClass} {
+      overflow: hidden${i};
+    }
+    ${p}.${bookPageBookCoverClass} h1.${bookBookTitleClass} {
+      margin: 0${i};
+      max-width: 100%${i};
+      font-family: var(--wbs-font-chapter, ${bookBodyFontFamily})${i};
+      font-size: clamp(1.75rem, 6vw, 2.75rem)${i};
+      font-weight: 700${i};
+      line-height: 1.25${i};
+      letter-spacing: -0.02em${i};
+      text-align: left${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
+      color: var(--book-cover-title-color, #ffffff)${i};
+    }
+    ${p}.${bookPageBookCoverClass} .book-book-subtitle {
+      margin: 1.25rem 0 0${i};
+      max-width: 100%${i};
+      font-size: 1.05rem${i};
+      line-height: 1.5${i};
+      color: var(--book-cover-title-color, #ffffff)${i};
+      opacity: 0.85${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
     }
     ${quotePageCss(p, i)}
   `;

@@ -1,6 +1,11 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import {
+  DEFAULT_COVER_BG,
+  DEFAULT_COVER_TITLE,
+  normalizeCoverColor,
+} from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
@@ -52,6 +57,18 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (typeof body.cover_path === "string") updates.cover_path = body.cover_path;
   if (body.heading_fonts && typeof body.heading_fonts === "object") {
     updates.heading_fonts = normalizeBookHeadingFonts(body.heading_fonts);
+  }
+  if (typeof body.cover_bg_color === "string") {
+    updates.cover_bg_color = normalizeCoverColor(
+      body.cover_bg_color,
+      DEFAULT_COVER_BG,
+    );
+  }
+  if (typeof body.cover_title_color === "string") {
+    updates.cover_title_color = normalizeCoverColor(
+      body.cover_title_color,
+      DEFAULT_COVER_TITLE,
+    );
   }
 
   const { data, error } = await supabase

@@ -9,9 +9,11 @@ import {
   bookPageCanvasCss,
   bookPageClass,
   bookPageContentClass,
+  bookPageBookCoverClass,
   bookPageCoverClass,
   bookPageEditorShellCss,
   bookPageReaderCss,
+  bookBookTitleClass,
   bookChapterTitleClass as bookPageChapterTitleClass,
 } from "@/lib/pages/bookPageCss";
 import { readerContentProtectionCss } from "@/lib/reader/contentProtection";
@@ -466,6 +468,9 @@ function headingFontsExplicitCss(
 
   return `
     .${bookPageCoverClass} h1.${bookPageChapterTitleClass} {
+      font-family: ${headingFontFamily(fonts.chapterTitle)}${i};
+    }
+    .${bookPageBookCoverClass} h1.${bookBookTitleClass} {
       font-family: ${headingFontFamily(fonts.chapterTitle)}${i};
     }
     .${bookPageClass}.${bookPageContentClass} h2 {

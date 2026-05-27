@@ -35,6 +35,12 @@ export default async function HomePage() {
           <h2 className="text-xl font-semibold text-stone-900">
             독자용 웹북 리더
           </h2>
+          {user && profile?.role !== "admin" && (
+            <p className="mx-auto mt-4 max-w-md rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <span className="font-medium">{user.email}</span>로 로그인되어 있지만
+              관리자 권한이 없습니다. 관리자 계정으로 다시 로그인하세요.
+            </p>
+          )}
           <p className="mx-auto mt-3 max-w-md text-sm leading-relaxed text-stone-500">
             구매하신 책의 매직링크로 접속하시면 이북처럼 읽으실 수 있습니다.
             작성 및 출판은 관리자만 가능합니다.
@@ -43,7 +49,7 @@ export default async function HomePage() {
             href="/login"
             className="mt-6 inline-block text-sm font-medium text-stone-900 underline"
           >
-            관리자이신가요? 로그인하기
+            {user ? "관리자 계정으로 로그인" : "관리자이신가요? 로그인하기"}
           </Link>
         </section>
       )}

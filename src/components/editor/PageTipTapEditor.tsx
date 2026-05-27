@@ -11,13 +11,23 @@ import { useEffect } from "react";
 type Props = {
   pageId: string;
   initialContent: Record<string, unknown>;
+  initialContentHtml?: string;
   onUpdate: (pageId: string, json: Record<string, unknown>, html: string) => void;
   registerEditor: (pageId: string, editor: Editor | null) => void;
 };
 
+function isEmptyDoc(content: Record<string, unknown>) {
+  const nodes = content.content;
+  if (!Array.isArray(nodes) || nodes.length === 0) return true;
+  if (nodes.length > 1) return false;
+  const first = nodes[0] as { type?: string; content?: unknown[] };
+  return first.type === "paragraph" && (!first.content || first.content.length === 0);
+}
+
 export function PageTipTapEditor({
   pageId,
   initialContent,
+  initialContentHtml = "",
   onUpdate,
   registerEditor,
 }: Props) {
@@ -38,6 +48,17 @@ export function PageTipTapEditor({
       onUpdate(pageId, ed.getJSON() as Record<string, unknown>, ed.getHTML());
     },
   });
+
+  useEffect(() => {
+    if (!editor) return;
+    if (
+      initialContentHtml.trim() &&
+      isEmptyDoc(initialContent) &&
+      !editor.getText().trim()
+    ) {
+      editor.commands.setContent(initialContentHtml);
+    }
+  }, [editor, initialContent, initialContentHtml]);
 
   useEffect(() => {
     if (!editor) return;

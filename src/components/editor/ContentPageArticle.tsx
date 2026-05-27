@@ -43,6 +43,7 @@ export const ContentPageArticle = memo(function ContentPageArticle({
             key={page.id}
             pageId={page.id}
             initialContent={page.content}
+            initialContentHtml={page.content_html}
             onUpdate={onUpdate}
             registerEditor={registerEditor}
           />

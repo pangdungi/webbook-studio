@@ -1,6 +1,12 @@
 import {
+  normalizeBookCoverStyle,
+  type BookCoverStyle,
+} from "@/lib/books/coverStyle";
+import {
+  bookBookTitleClass,
   bookChapterTitleClass,
   bookPageBodyClass,
+  bookPageBookCoverClass,
   bookPageClass,
   bookPageContentClass,
   bookPageCoverClass,
@@ -19,6 +25,28 @@ function escapeHtml(text: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/** EPUB — 책 표지 (첫 페이지) */
+export function buildBookCoverEpubHtml(
+  title: string,
+  subtitle: string | null | undefined,
+  cover: Partial<BookCoverStyle>,
+): string {
+  const { cover_bg_color, cover_title_color } = normalizeBookCoverStyle(cover);
+  const safeTitle = escapeHtml(title.trim() || "제목 없음");
+  const subtitleHtml = subtitle?.trim()
+    ? `<p class="book-book-subtitle" style="margin:1.25rem 0 0;font-size:1.05rem;line-height:1.5;color:${cover_title_color};opacity:0.85;white-space:pre-line;">${escapeHtml(subtitle.trim())}</p>`
+    : "";
+
+  const articleStyle = [
+    `--book-cover-bg:${cover_bg_color}`,
+    `--book-cover-title-color:${cover_title_color}`,
+    `background-color:${cover_bg_color}`,
+    "padding:5.5rem 2rem 2.5rem 3rem",
+  ].join(";");
+
+  return `<div class="${bookPageShellClass}"><article class="${bookPageClass} ${bookPageBookCoverClass}" style="${articleStyle}"><div class="${bookPageBodyClass}"><h1 class="${bookBookTitleClass}" style="margin:0;font-size:2.25rem;font-weight:700;line-height:1.25;color:${cover_title_color};white-space:pre-line;">${safeTitle}</h1>${subtitleHtml}</div></article></div>`;
 }
 
 /** EPUB spine — 페이지 1파일 = 1 spine 항목 */
