@@ -9,6 +9,7 @@ import {
   readerBookPath,
   readerCookieOptions,
 } from "@/lib/access/readerSession";
+import { isReaderOnlyHost } from "@/lib/utils/siteUrls";
 
 async function getProfileRole(
   supabase: ReturnType<typeof createServerClient>,
@@ -36,8 +37,23 @@ function attachReaderCookie(response: NextResponse, token: string, secure: boole
 
 export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname;
+  const hostname = request.nextUrl.hostname;
   const secure = request.nextUrl.protocol === "https:";
   const tokenFromPath = parseReaderTokenFromPath(pathname);
+  const readerOnlySite = isReaderOnlyHost(hostname);
+
+  /* 독자 전용 도메인: 출판 플랫폼 경로 없음 — /read 만 */
+  if (readerOnlySite) {
+    if (!isReaderAllowedPath(pathname)) {
+      return new NextResponse("Not Found", { status: 404 });
+    }
+
+    let response = NextResponse.next({ request });
+    if (tokenFromPath) {
+      attachReaderCookie(response, tokenFromPath, secure);
+    }
+    return response;
+  }
 
   let supabaseResponse = NextResponse.next({ request });
 
