@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
@@ -20,6 +20,12 @@ const notoSans = Noto_Sans_KR({
 export const metadata: Metadata = {
   title: "Webbook Studio",
   description: "웹북 작성·출판·리더 플랫폼",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

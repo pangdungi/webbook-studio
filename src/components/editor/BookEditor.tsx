@@ -16,8 +16,11 @@ import {
   chapterContentToJson,
   chapterPagesToStorageHtml,
   createPage,
+  normalizeContentPageDoc,
   parseChapterContent,
 } from "@/lib/pages/content";
+import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
+import { typographyGuide } from "@/lib/typography/bookStyles";
 import type { BookPage, PageKind } from "@/lib/pages/types";
 import { quoteContentToHtml } from "@/lib/pages/quotePage";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
@@ -222,11 +225,32 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [flushSave],
   );
 
+  const snapshotEditorPage = useCallback(
+    (pageId: string) => {
+      const editor = editorsRef.current.get(pageId);
+      const page = pagesRef.current.find((p) => p.id === pageId);
+      if (!editor || page?.kind !== "content") return null;
+
+      const json = normalizeContentPageDoc(
+        editor.getJSON() as Record<string, unknown>,
+      );
+      return {
+        json,
+        html: contentPageDocToHtml(json),
+      };
+    },
+    [],
+  );
+
   const handlePageUpdate = useCallback(
-    (pageId: string, json: Record<string, unknown>, html: string) => {
+    (pageId: string, json: Record<string, unknown>) => {
+      const normalized = normalizeContentPageDoc(json);
+      const html = contentPageDocToHtml(normalized);
       setPages((prev) => {
         const next = prev.map((p) =>
-          p.id === pageId ? { ...p, content: json, content_html: html } : p,
+          p.id === pageId
+            ? { ...p, content: normalized, content_html: html }
+            : p,
         );
         queueMicrotask(() => persist(next));
         return next;
@@ -289,45 +313,33 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     };
   }, [flushSave]);
 
-  const scrollToPage = useCallback(function scrollToPage(
-    pageId: string,
-    focusEditor = false,
-    attempt = 0,
-  ) {
-    const scroller = scrollRef.current;
-    const pageEl = pageRefs.current.get(pageId);
-    if (!scroller || !pageEl) {
-      if (attempt < 4) {
-        requestAnimationFrame(() => scrollToPage(pageId, focusEditor, attempt + 1));
-      }
-      return;
-    }
-
-    const top =
-      pageEl.getBoundingClientRect().top -
-      scroller.getBoundingClientRect().top +
-      scroller.scrollTop;
-
-    scroller.scrollTo({ top: Math.max(0, top - 12), behavior: "smooth" });
-
-    if (!focusEditor) return;
-
-    const page = pagesRef.current.find((p) => p.id === pageId);
-    if (page?.kind !== "content") return;
-
-    window.setTimeout(() => {
-      editorsRef.current.get(pageId)?.commands.focus("end", { scrollIntoView: false });
-    }, 280);
-  }, []);
+  const activePageIdRef = useRef(activePageId);
+  activePageIdRef.current = activePageId;
 
   const selectPage = useCallback(
     (pageId: string) => {
+      const fromId = activePageIdRef.current;
+
+      if (fromId !== pageId) {
+        const snap = snapshotEditorPage(fromId);
+        if (snap) {
+          setPages((prev) => {
+            const next = prev.map((p) =>
+              p.id === fromId
+                ? { ...p, content: snap.json, content_html: snap.html }
+                : p,
+            );
+            queueMicrotask(() => persist(next));
+            return next;
+          });
+        }
+      }
+
       setActivePageId(pageId);
-      requestAnimationFrame(() => {
-        scrollToPage(pageId, true);
-      });
+      pageRefs.current.clear();
+      scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
     },
-    [scrollToPage],
+    [persist, snapshotEditorPage],
   );
 
   const addPage = (kind: Extract<PageKind, "content" | "quote">) => {
@@ -542,9 +554,23 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     return String(contentPageIndex(page.id) + 1);
   };
 
+  const activePageIndex = pages.findIndex((p) => p.id === activePageId);
+  const goAdjacentPage = (delta: -1 | 1) => {
+    const next = pages[activePageIndex + delta];
+    if (next) selectPage(next.id);
+  };
+
   useEffect(() => {
-    requestAnimationFrame(() => scrollToPage(activePageId));
-  }, [chapterId, scrollToPage]);
+    scrollRef.current?.scrollTo({ top: 0, behavior: "instant" });
+    const page = pagesRef.current.find((p) => p.id === activePageId);
+    if (page?.kind !== "content") return;
+    const t = window.setTimeout(() => {
+      editorsRef.current.get(activePageId)?.commands.focus("end", {
+        scrollIntoView: false,
+      });
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, [chapterId, activePageId]);
 
   return (
     <div className="relative flex flex-1 flex-col">
@@ -573,7 +599,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           active={activeEditor?.isActive("paragraph")}
           disabled={!isContentPageActive}
           onClick={() => activeEditor?.chain().focus().setParagraph().run()}
-          title="본문"
+          title={typographyGuide.p}
         >
           본문
         </ToolbarButton>
@@ -645,8 +671,26 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
       </div>
 
-      <div className="flex items-center gap-2 border-b border-stone-100 bg-stone-50 px-4 py-2 text-xs text-stone-600">
+      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 bg-stone-50 px-4 py-2 text-xs text-stone-600">
         <span className="font-medium text-stone-800">페이지</span>
+        <button
+          type="button"
+          disabled={activePageIndex <= 0}
+          onClick={() => goAdjacentPage(-1)}
+          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100 disabled:opacity-40"
+          title="이전 페이지"
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          disabled={activePageIndex < 0 || activePageIndex >= pages.length - 1}
+          onClick={() => goAdjacentPage(1)}
+          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100 disabled:opacity-40"
+          title="다음 페이지"
+        >
+          →
+        </button>
         {pages.map((page) => (
           <button
             key={page.id}
@@ -665,6 +709,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           type="button"
           onClick={() => addPage("content")}
           className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
+          title="본문 페이지 추가"
         >
           + 본문
         </button>
@@ -691,49 +736,42 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         className="book-page-editor-scroll flex-1 overflow-y-auto"
       >
         <div ref={shellRef} className={bookPageShellClass}>
-          {pages.map((page) =>
-            page.kind === "chapter-cover" ? (
-              <article
-                key={page.id}
-                ref={(el) => {
-                  if (el) pageRefs.current.set(page.id, el);
-                  else pageRefs.current.delete(page.id);
-                }}
-                className={`${bookPageClass} ${bookPageCoverClass}`}
-                onClick={() => selectPage(page.id)}
-                aria-label="장 표지"
-              >
-                <div className={bookPageBodyClass}>
-                  <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
-                </div>
-              </article>
-            ) : page.kind === "quote" ? (
-              <QuotePageArticle
-                key={page.id}
-                page={page}
-                isActive={page.id === activePageId}
-                onSelect={selectPage}
-                onUpdate={handleQuoteUpdate}
-                pageRef={(el) => {
-                  if (el) pageRefs.current.set(page.id, el);
-                  else pageRefs.current.delete(page.id);
-                }}
-              />
-            ) : (
-              <ContentPageArticle
-                key={page.id}
-                page={page}
-                isActive={page.id === activePageId}
-                onSelect={selectPage}
-                onUpdate={handlePageUpdate}
-                registerEditor={registerEditor}
-                pageRef={(el) => {
-                  if (el) pageRefs.current.set(page.id, el);
-                  else pageRefs.current.delete(page.id);
-                }}
-              />
-            ),
-          )}
+          {activePage?.kind === "chapter-cover" ? (
+            <article
+              key={activePage.id}
+              ref={(el) => {
+                if (el) pageRefs.current.set(activePage.id, el);
+                else pageRefs.current.delete(activePage.id);
+              }}
+              className={`${bookPageClass} ${bookPageCoverClass}`}
+              aria-label="장 표지"
+            >
+              <div className={bookPageBodyClass}>
+                <h1 className={bookChapterTitleClass}>{chapterTitle}</h1>
+              </div>
+            </article>
+          ) : activePage?.kind === "quote" ? (
+            <QuotePageArticle
+              key={activePage.id}
+              page={activePage}
+              onUpdate={handleQuoteUpdate}
+              pageRef={(el) => {
+                if (el) pageRefs.current.set(activePage.id, el);
+                else pageRefs.current.delete(activePage.id);
+              }}
+            />
+          ) : activePage?.kind === "content" ? (
+            <ContentPageArticle
+              key={activePage.id}
+              page={activePage}
+              onUpdate={handlePageUpdate}
+              registerEditor={registerEditor}
+              pageRef={(el) => {
+                if (el) pageRefs.current.set(activePage.id, el);
+                else pageRefs.current.delete(activePage.id);
+              }}
+            />
+          ) : null}
         </div>
       </div>
 

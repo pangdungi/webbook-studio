@@ -1,19 +1,35 @@
 "use client";
 
-import dynamic from "next/dynamic";
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
-import type { NavItem, Rendition } from "epubjs";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { NavItem } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import { DEFAULT_BOOK_HEADING_FONTS } from "@/lib/typography/headingFonts";
-import { useEpubBlobUrl } from "@/components/reader/useEpubBlobUrl";
-import { useReaderSwipe } from "@/components/reader/useReaderSwipe";
-import type { ReaderViewMode } from "@/components/reader/EpubViewer";
+import {
+  scrollUrlFromEpubUrl,
+  useReaderScrollContent,
+} from "@/components/reader/useReaderScrollContent";
+import {
+  HtmlScrollReader,
+  type HtmlScrollReaderHandle,
+} from "@/components/reader/HtmlScrollReader";
+import type { ReaderTocEntry } from "@/lib/reader/buildBookScrollDocument";
+import { ReaderChrome } from "@/components/reader/ReaderChrome";
+import { IconClose } from "@/components/reader/ReaderChromeIcons";
+import {
+  loadReaderFontScale,
+  READER_FONT_SCALE_PERCENT,
+  saveReaderFontScale,
+  type ReaderFontScale,
+} from "@/lib/reader/fontScale";
+import {
+  loadReaderViewMode,
+  saveReaderViewMode,
+  type ReaderViewMode,
+} from "@/lib/reader/viewMode";
 
-const EpubViewer = dynamic(
-  () => import("@/components/reader/EpubViewer").then((m) => m.EpubViewer),
-  { ssr: false },
-);
+const PAGINATED_HINT =
+  "페이지 모드 — 출판 책처럼 화면 한 장씩 넘깁니다. 이어서 읽기는 스크롤 모드를 이용하세요.";
 
 type Props = {
   epubUrl: string;
@@ -33,24 +49,56 @@ export function WebBookReader({
   protectContent = false,
 }: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
+  const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
+  const [chromeOpen, setChromeOpen] = useState(false);
+  const [showPaginatedHint, setShowPaginatedHint] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const [toc, setToc] = useState<NavItem[]>([]);
-  const navRef = useRef<{ prev: () => void; next: () => void; goTo: (href: string) => void } | null>(null);
+  const readerNavRef = useRef<HtmlScrollReaderHandle | null>(null);
   const readerAreaRef = useRef<HTMLDivElement>(null);
-  const { epubData, loading, error } = useEpubBlobUrl(epubUrl);
+
+  const scrollUrl = scrollUrlFromEpubUrl(epubUrl);
+  const { content, loading, error } = useReaderScrollContent(scrollUrl);
 
   useEffect(() => {
     if (!embedded) document.title = title;
   }, [title, embedded]);
 
-  const handleTocReady = useCallback((items: NavItem[]) => {
-    setToc(items);
+  useEffect(() => {
+    setViewMode(loadReaderViewMode());
+    setFontScale(loadReaderFontScale());
   }, []);
 
-  const goPrev = useCallback(() => navRef.current?.prev(), []);
-  const goNext = useCallback(() => navRef.current?.next(), []);
+  const changeViewMode = (mode: ReaderViewMode) => {
+    setViewMode(mode);
+    saveReaderViewMode(mode);
+    if (mode === "paginated") {
+      setShowPaginatedHint(true);
+    }
+  };
 
-  useReaderSwipe(viewMode === "paginated", goPrev, goNext, readerAreaRef);
+  const changeFontScale = (scale: ReaderFontScale) => {
+    setFontScale(scale);
+    saveReaderFontScale(scale);
+  };
+
+  const handleTocReady = useCallback((items: NavItem[] | ReaderTocEntry[]) => {
+    setToc(
+      items.map((item) => ({
+        label: item.label,
+        href: item.href,
+      })) as NavItem[],
+    );
+  }, []);
+
+  const goPrev = useCallback(() => readerNavRef.current?.prev(), []);
+  const goNext = useCallback(() => readerNavRef.current?.next(), []);
+  const goTo = useCallback((href: string) => readerNavRef.current?.goTo(href), []);
+
+  const handleReadingAreaTap = useCallback(() => {
+    if (tocOpen) return;
+    setChromeOpen((open) => !open);
+  }, [tocOpen]);
 
   useEffect(() => {
     if (!protectContent) return;
@@ -87,83 +135,82 @@ export function WebBookReader({
   }, [viewMode, goPrev, goNext]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-stone-50">
-      <header className="flex shrink-0 items-center justify-between border-b border-stone-200 bg-white px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <h1 className="truncate text-xs font-semibold text-stone-900 sm:text-sm">
-            {title}
-          </h1>
-        </div>
-        <div className="flex items-center gap-1 sm:gap-2">
-          <button
-            type="button"
-            onClick={() => setTocOpen((v) => !v)}
-            className={`rounded-lg px-2 py-1 text-[11px] font-medium sm:px-3 sm:py-1.5 sm:text-xs ${
-              tocOpen ? "bg-stone-900 text-white" : "text-stone-600 hover:bg-stone-100"
-            }`}
-          >
-            목차
-          </button>
-          <div
-            className="flex rounded-lg bg-stone-100 p-0.5"
-            role="group"
-            aria-label="읽기 방식"
-          >
-            <button
-              type="button"
-              onClick={() => setViewMode("scroll")}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium sm:px-3 sm:py-1.5 sm:text-xs ${
-                viewMode === "scroll"
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              스크롤
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("paginated")}
-              className={`rounded-md px-2 py-1 text-[11px] font-medium sm:px-3 sm:py-1.5 sm:text-xs ${
-                viewMode === "paginated"
-                  ? "bg-white text-stone-900 shadow-sm"
-                  : "text-stone-500 hover:text-stone-700"
-              }`}
-            >
-              페이지
-            </button>
-          </div>
-        </div>
-      </header>
-
+    <div
+      className="relative flex h-full min-h-0 flex-col bg-stone-50"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        <ReaderChrome
+          title={title}
+          open={chromeOpen}
+          onClose={() => setChromeOpen(false)}
+          viewMode={viewMode}
+          onViewMode={changeViewMode}
+          fontScale={fontScale}
+          onFontScale={changeFontScale}
+          onOpenToc={() => {
+            setTocOpen(true);
+            setChromeOpen(false);
+          }}
+          paginatedHint={
+            showPaginatedHint && viewMode === "paginated" ? PAGINATED_HINT : null
+          }
+          onDismissPaginatedHint={() => setShowPaginatedHint(false)}
+        />
+
         {tocOpen && toc.length > 0 && (
-          <aside className="absolute inset-y-0 left-0 z-20 w-64 shrink-0 overflow-y-auto border-r border-stone-200 bg-white p-4 shadow-lg sm:relative sm:shadow-none">
-            <h2 className="mb-3 text-xs font-semibold uppercase tracking-wide text-stone-400">
-              목차
-            </h2>
-            <ol className="space-y-1 text-sm">
-              {toc.map((item, i) => (
-                <li key={`${item.href}-${i}`}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navRef.current?.goTo(item.href);
-                      setTocOpen(false);
-                    }}
-                    className="w-full rounded-lg px-2 py-1.5 text-left text-stone-700 hover:bg-stone-100"
-                  >
-                    {item.label?.trim() || `항목 ${i + 1}`}
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </aside>
+          <>
+            <button
+              type="button"
+              aria-label="목차 닫기"
+              className="fixed inset-0 z-30 bg-stone-900/25"
+              onClick={() => setTocOpen(false)}
+            />
+            <aside
+              className="fixed inset-y-0 left-0 z-40 flex w-[min(85vw,18rem)] flex-col bg-white shadow-xl"
+              style={{
+                paddingTop: "env(safe-area-inset-top)",
+                paddingBottom: "env(safe-area-inset-bottom)",
+                paddingLeft: "env(safe-area-inset-left)",
+              }}
+            >
+              <div className="flex items-center justify-between border-b border-stone-100 px-3 py-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-stone-400">
+                  목차
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setTocOpen(false)}
+                  aria-label="목차 닫기"
+                  className="flex h-9 w-9 items-center justify-center rounded-full text-stone-600 hover:bg-stone-100"
+                >
+                  <IconClose className="h-5 w-5" />
+                </button>
+              </div>
+              <ol className="reader-hide-scrollbar flex-1 space-y-0.5 overflow-y-auto p-2 text-sm">
+                {toc.map((item, i) => (
+                  <li key={`${item.href}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        goTo(item.href);
+                        setTocOpen(false);
+                      }}
+                      className="w-full rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-100"
+                    >
+                      {item.label?.trim() || `항목 ${i + 1}`}
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </aside>
+          </>
         )}
 
         <div
           ref={readerAreaRef}
-          className={`relative min-h-0 min-w-0 flex-1 ${
-            viewMode === "paginated" ? "touch-pan-x" : ""
+          className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${
+            viewMode === "paginated" ? "touch-pan-x" : "touch-pan-y"
           } ${protectContent ? "select-none" : ""}`}
         >
           {loading && (
@@ -176,19 +223,23 @@ export function WebBookReader({
               {error}
             </div>
           )}
-          {!loading && !error && epubData && (
-            <EpubViewerWithNav
-              ref={navRef}
-              data={epubData}
+          {!loading && !error && content && (
+            <HtmlScrollReader
+              key={viewMode}
+              ref={readerNavRef}
+              bodyHtml={content.bodyHtml}
+              toc={content.toc}
               viewMode={viewMode}
               writingMode={writingMode}
               headingFonts={headingFonts}
+              fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
               onTocReady={handleTocReady}
+              onReadingAreaTap={handleReadingAreaTap}
             />
           )}
 
-          {viewMode === "paginated" && !loading && !error && epubData && (
+          {viewMode === "paginated" && !loading && !error && content && (
             <>
               <button
                 type="button"
@@ -213,40 +264,3 @@ export function WebBookReader({
     </div>
   );
 }
-
-const EpubViewerWithNav = forwardRef<
-  { prev: () => void; next: () => void; goTo: (href: string) => void },
-  {
-    data: ArrayBuffer;
-    viewMode: ReaderViewMode;
-    writingMode: WritingMode;
-    headingFonts: BookHeadingFonts;
-    protectContent?: boolean;
-    onTocReady: (toc: NavItem[]) => void;
-  }
->(function EpubViewerWithNav(
-  { data, viewMode, writingMode, headingFonts, protectContent, onTocReady },
-  ref,
-) {
-  const renditionRef = useRef<Rendition | null>(null);
-
-  useImperativeHandle(ref, () => ({
-    prev: () => renditionRef.current?.prev(),
-    next: () => renditionRef.current?.next(),
-    goTo: (href: string) => renditionRef.current?.display(href),
-  }));
-
-  return (
-    <EpubViewer
-      data={data}
-      viewMode={viewMode}
-      writingMode={writingMode}
-      headingFonts={headingFonts}
-      protectContent={protectContent}
-      onTocReady={onTocReady}
-      onRendition={(rendition) => {
-        renditionRef.current = rendition;
-      }}
-    />
-  );
-});

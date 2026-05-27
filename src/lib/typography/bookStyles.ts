@@ -7,16 +7,22 @@ import {
 } from "@/lib/typography/headingFonts";
 import {
   bookPageCanvasCss,
+  bookBodyContinueClass,
   bookPageClass,
   bookPageContentClass,
   bookPageBookCoverClass,
   bookPageCoverClass,
   bookPageEditorShellCss,
   bookPageReaderCss,
+  bookPageReaderScrollCss,
+  bookPageReaderScrollLayoutCss,
+  bookPageReaderPaginatedCss,
+  bookPageReaderPaginatedInViewportCss,
   bookBookTitleClass,
   bookChapterTitleClass as bookPageChapterTitleClass,
 } from "@/lib/pages/bookPageCss";
 import { readerContentProtectionCss } from "@/lib/reader/contentProtection";
+import { publishingReaderPageCss } from "@/lib/typography/publishingTypography";
 import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
 
 /** 본문 명조 — 편집기·EPUB·리더 공통 */
@@ -140,19 +146,23 @@ export const typographyGuide = {
   chapter: "목차 + 장 표지 — 왼쪽에서 이름을 바꾸면 표지 제목도 함께 바뀝니다",
   h2: "중제목 — 장 본문 안의 큰 소주제",
   h3: "소제목 — 더 잘게 나눈 항목",
-  p: "본문 — 양쪽 정렬 + 들여쓰기 (한국 소설형)",
+  p: "본문 — 줄 너비만큼 채운 뒤 줄바꿈·양쪽 정렬(마지막 줄만 왼쪽) · 새 문단 첫 줄 들여쓰기 1em",
+  page: "한 페이지가 가득 차면 더 입력되지 않습니다 — 이어 쓸 때는 「+ 본문」으로 새 페이지를 추가하세요",
 } as const;
 
 export const bodyParagraphStyles = {
   "font-size": "1em",
   "font-weight": "400",
   "line-height": "1.75",
-  "text-align": "left",
+  "text-align": "justify",
+  "text-align-last": "left",
+  "text-justify": "inter-word",
   "text-indent": "1em",
-  "word-break": "keep-all",
+  "word-break": "normal",
   "overflow-wrap": "break-word",
   "letter-spacing": "0",
   "word-spacing": "normal",
+  hyphens: "none",
   "margin-top": "0",
   "margin-bottom": "0",
 } as const;
@@ -201,16 +211,23 @@ function proseContentCss(contentRoot: string, important = false) {
       font-size: 1em${i};
       font-weight: 400${i};
       line-height: 1.75${i};
-      text-align: left${i};
+      text-align: justify${i};
+      text-align-last: left${i};
+      text-justify: inter-word${i};
       text-indent: 1em${i};
-      word-break: keep-all${i};
-      overflow-wrap: anywhere${i};
+      word-break: normal${i};
+      overflow-wrap: break-word${i};
+      line-break: loose${i};
       word-spacing: normal${i};
       letter-spacing: 0${i};
-      text-wrap: pretty${i};
+      hyphens: none${i};
+      text-wrap: wrap${i};
       margin: 0${i};
       max-width: 100%${i};
       color: #1c1917${i};
+    }
+    ${r} p.${bookBodyContinueClass} {
+      text-indent: 0${i};
     }
     ${r} h1 + p, ${r} h2 + p, ${r} h3 + p, ${r} hr + p, ${r} blockquote + p {
       text-indent: 0${i};
@@ -249,14 +266,16 @@ function proseContainerCss(containerSelector: string, important = false) {
       container-type: inline-size${i};
       container-name: page${i};
     }
-    @container page (min-width: 32em) {
-      ${containerSelector} p.book-body-p,
-      ${containerSelector} p {
-        text-align: justify${i};
-        text-align-last: left${i};
-        text-justify: inter-word${i};
-      }
-    }
+  `;
+}
+
+/** 편집기·독자·EPUB — 본문 타이포 동일 (proseContentCss 한 함수) */
+export function bookProseTypographyCss(important = false) {
+  const contentRoot = `.${bookPageClass}.${bookPageContentClass}`;
+  return `
+    ${proseContentCss(contentRoot, important)}
+    ${proseContentCss(".book-page-prose", important)}
+    ${proseContainerCss(contentRoot, important)}
   `;
 }
 
@@ -371,8 +390,10 @@ export function bookEditorCss() {
       outline: none;
       min-height: 12rem;
     }
-    ${proseContentCss(".book-page-prose .ProseMirror")}
-    ${proseContainerCss(".book-page-prose")}
+    ${bookProseTypographyCss()}
+    .book-page-prose p.book-body-p:empty {
+      min-height: 1.75em;
+    }
     .book-page-prose .ProseMirror p.is-editor-empty:first-child::before {
       color: #a8a29e;
       content: attr(data-placeholder);
@@ -501,8 +522,8 @@ export function epubTypographyCss(
     ${writingModeCss}
     * { box-sizing: border-box; }
     ${bookPageReaderCss()}
-    ${proseContentCss(`.${bookPageClass}.${bookPageContentClass}`)}
-    ${proseContainerCss(`.${bookPageClass}`)}
+    ${bookPageReaderScrollCss()}
+    ${bookProseTypographyCss()}
     ${proseImageCss("scroll")}
     .epub-author, .epub-link { display: none; }
   `;
@@ -544,15 +565,56 @@ export function readerInjectCss(
     }
   `;
 
+  const scrollCss =
+    viewMode === "scroll" ? bookPageReaderScrollCss(true) : bookPageReaderPaginatedCss(true);
+
   return `
     ${modeCss}
     ${vars}
     ${headingFontsExplicitCss(headingFonts, true)}
     ${bookPageReaderCss(true)}
+    ${scrollCss}
     ${viewMode === "paginated" ? readerPaginatedPageCss(true) : ""}
-    ${proseContentCss(`.${bookPageClass}.${bookPageContentClass}`, true)}
-    ${proseContainerCss(`.${bookPageClass}`, true)}
+    ${bookProseTypographyCss(true)}
     ${proseImageCss(viewMode)}
     ${protectContent ? readerContentProtectionCss() : ""}
+  `;
+}
+
+/** HTML 스크롤 리더 — iframe 없이 .reader-scroll-viewport 한 곳만 스크롤 */
+export function readerHtmlScrollInjectCss(
+  writingMode: "horizontal-tb" | "vertical-rl",
+  headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  protectContent = false,
+  viewMode: "scroll" | "paginated" = "scroll",
+) {
+  const modeCss =
+    writingMode === "vertical-rl"
+      ? `.reader-scroll-surface { writing-mode: vertical-rl !important; text-orientation: mixed !important; }`
+      : "";
+
+  const vars = `
+    :root {
+      --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)} !important;
+      --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)} !important;
+      --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)} !important;
+    }
+  `;
+
+  const pageLayoutCss =
+    viewMode === "paginated"
+      ? bookPageReaderPaginatedInViewportCss(true)
+      : bookPageReaderScrollLayoutCss(true);
+
+  return `
+    ${modeCss}
+    ${vars}
+    ${headingFontsExplicitCss(headingFonts, true)}
+    ${bookPageReaderCss(true)}
+    ${pageLayoutCss}
+    ${bookProseTypographyCss(true)}
+    ${proseImageCss(viewMode)}
+    ${viewMode === "paginated" ? publishingReaderPageCss(true) : ""}
+    ${protectContent ? readerContentProtectionCss().replace(/\bhtml,\s*body\b/g, ".reader-scroll-surface") : ""}
   `;
 }

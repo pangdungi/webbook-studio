@@ -23,12 +23,48 @@ body {
   max-height: 100% !important;
 }
 
+/* 독자·미리보기 — 스크롤은 유지, 스크롤바만 숨김 */
+.reader-hide-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.reader-hide-scrollbar::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .epub-viewer-root[data-mode="scroll"] > div.epub-container {
   overflow-y: auto !important;
   overflow-x: hidden !important;
   -webkit-overflow-scrolling: touch;
-  overscroll-behavior: contain;
+  overscroll-behavior: auto;
   touch-action: pan-y;
+  scroll-snap-type: none !important;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.epub-viewer-root[data-mode="scroll"] > div.epub-container::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* 스크롤 모드 — 섹션은 내용 높이만큼, 바깥 컨테이너만 일반 웹페이지처럼 스크롤 */
+.epub-viewer-root[data-mode="scroll"] .epub-container > div,
+.epub-viewer-root[data-mode="scroll"] .epub-view {
+  height: auto !important;
+  min-height: 0 !important;
+  overflow: visible !important;
+  scroll-snap-align: none !important;
+  scroll-snap-stop: normal !important;
+}
+
+.epub-viewer-root[data-mode="scroll"] iframe {
+  display: block !important;
+  overflow: hidden !important;
 }
 
 .epub-viewer-root[data-mode="paginated"] > div.epub-container {

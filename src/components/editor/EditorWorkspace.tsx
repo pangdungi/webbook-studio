@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { BookCoverEditor } from "@/components/editor/BookCoverEditor";
 import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
+import { ReaderAnalysisPanel } from "@/components/editor/ReaderAnalysisPanel";
 import {
   normalizeBookCoverStyle,
   type BookCoverStyle,
 } from "@/lib/books/coverStyle";
-import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
+import { normalizeBookReaderFields } from "@/lib/books/readerFields";
+import { buildChapterSample } from "@/lib/readerAnalysis/sampleText";
+import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
 import type { Book, Chapter } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import {
@@ -36,6 +39,7 @@ export function EditorWorkspace({
     ...initialBook,
     ...normalizeBookCoverStyle(initialBook),
     heading_fonts: normalizeBookHeadingFonts(initialBook.heading_fonts),
+    ...normalizeBookReaderFields(initialBook),
   }));
   const [editorPanel, setEditorPanel] = useState<"book-cover" | "chapter">(
     "chapter",
@@ -46,7 +50,16 @@ export function EditorWorkspace({
   );
   const [publishing, setPublishing] = useState(false);
   const [message, setMessage] = useState("");
-  const [previewOpen, setPreviewOpen] = useState(false);
+  const initialReader = normalizeBookReaderFields(initialBook);
+  const [readerPitch, setReaderPitch] = useState(() => initialReader.reader_pitch);
+  const [readerReport, setReaderReport] = useState<ReaderAnalysisReport | null>(
+    () => initialReader.reader_analysis,
+  );
+  const [readerPanelOpen, setReaderPanelOpen] = useState(false);
+  const [readerLoading, setReaderLoading] = useState(false);
+  const [readerError, setReaderError] = useState<string | null>(null);
+  const [readerProvider, setReaderProvider] = useState<string | null>(null);
+  const [readerIncludeSample, setReaderIncludeSample] = useState(true);
   const [saveState, setSaveState] = useState<
     "saved" | "pending" | "saving" | "error"
   >("saved");
@@ -114,8 +127,40 @@ export function EditorWorkspace({
     [],
   );
 
-  const saveAll = useCallback(async () => {
-    if (manualSaving) return;
+  const applyFlushedChapter = useCallback(
+    (flushed: {
+      chapterId: string;
+      contentJson: Record<string, unknown>;
+      contentHtml: string;
+    }) => {
+      setChapters((prev) =>
+        prev.map((c) =>
+          c.id === flushed.chapterId
+            ? {
+                ...c,
+                content_json: flushed.contentJson,
+                content_html: flushed.contentHtml,
+              }
+            : c,
+        ),
+      );
+    },
+    [],
+  );
+
+  const flushActiveChapter = useCallback(async (): Promise<boolean> => {
+    if (editorPanel !== "chapter" || !editorRef.current) return true;
+    try {
+      const flushed = await editorRef.current.flushPendingSave();
+      if (flushed) applyFlushedChapter(flushed);
+      return true;
+    } catch {
+      return false;
+    }
+  }, [editorPanel, applyFlushedChapter]);
+
+  const saveAll = useCallback(async (): Promise<boolean> => {
+    if (manualSaving) return false;
 
     setManualSaving(true);
     setSaveState("saving");
@@ -134,6 +179,7 @@ export function EditorWorkspace({
               }
             : c,
         );
+        applyFlushedChapter(flushed);
       }
 
       await fetch(`/api/books/${bookId}`, {
@@ -144,6 +190,9 @@ export function EditorWorkspace({
           heading_fonts: book.heading_fonts,
           cover_bg_color: book.cover_bg_color,
           cover_title_color: book.cover_title_color,
+          reader_pitch: readerPitch,
+          /* null을내면 DB 레포트가 삭제되므로, 분석 없을 때는 필드 생략 */
+          ...(readerReport ? { reader_analysis: readerReport } : {}),
         }),
       }).then(async (res) => {
         if (!res.ok) {
@@ -167,21 +216,128 @@ export function EditorWorkspace({
 
       setChapters(chaptersToSave);
       setSaveState("saved");
+      return true;
     } catch {
       setSaveState("error");
       alert("저장에 실패했습니다. 네트워크를 확인한 뒤 다시 「전체 저장」을 눌러 주세요.");
+      return false;
     } finally {
       setManualSaving(false);
     }
   }, [
+    applyFlushedChapter,
     book.title,
     book.heading_fonts,
     book.cover_bg_color,
     book.cover_title_color,
+    readerPitch,
+    readerReport,
     bookId,
     manualSaving,
     saveChapter,
   ]);
+
+  const saveReaderPitch = useCallback(
+    async (pitch: string) => {
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reader_pitch: pitch }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "책 요약 저장에 실패했습니다.",
+        );
+      }
+      const data = await res.json();
+      const normalized = normalizeBookReaderFields(data.book);
+      setBook((b) => ({ ...b, reader_pitch: normalized.reader_pitch }));
+      setReaderPitch(normalized.reader_pitch);
+    },
+    [bookId],
+  );
+
+  const saveReaderData = useCallback(
+    async (pitch: string, report: ReaderAnalysisReport) => {
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reader_pitch: pitch,
+          reader_analysis: report,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "독자 분석 저장에 실패했습니다.",
+        );
+      }
+      const data = await res.json();
+      const normalized = normalizeBookReaderFields(data.book);
+      setBook((b) => ({ ...b, ...normalized }));
+      setReaderPitch(normalized.reader_pitch);
+      setReaderReport(normalized.reader_analysis);
+    },
+    [bookId],
+  );
+
+  const runReaderAnalysis = useCallback(async () => {
+    if (!readerPitch.trim()) {
+      setReaderError("책 내용 요약을 입력해 주세요.");
+      return;
+    }
+
+    setReaderLoading(true);
+    setReaderError(null);
+    setReaderProvider(null);
+
+    try {
+      const sampleText = readerIncludeSample
+        ? buildChapterSample(chaptersRef.current)
+        : undefined;
+
+      const res = await fetch("/api/reader-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pitch: readerPitch,
+          bookTitle: book.title,
+          sampleText: sampleText || undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "독자 분석에 실패했습니다.",
+        );
+      }
+
+      const report = data.report as ReaderAnalysisReport;
+      await saveReaderData(readerPitch, report);
+      setReaderReport(report);
+      setReaderProvider(data.provider ?? null);
+      setReaderPanelOpen(true);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "독자 분석에 실패했습니다.";
+      setReaderError(
+        msg.includes("저장")
+          ? `${msg} (화면에만 보일 수 있음 — 「전체 저장」 또는 다시 분석해 주세요.)`
+          : msg,
+      );
+    } finally {
+      setReaderLoading(false);
+    }
+  }, [book.title, readerPitch, readerIncludeSample, saveReaderData]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -292,18 +448,45 @@ export function EditorWorkspace({
     [book, bookId],
   );
 
-  const selectChapter = useCallback((id: string) => {
-    setEditorPanel("chapter");
-    setActiveChapterId(id);
-  }, []);
+  const selectChapter = useCallback(
+    async (id: string) => {
+      if (id !== activeChapterId && editorPanel === "chapter") {
+        const ok = await flushActiveChapter();
+        if (!ok) {
+          alert(
+            "챕터 저장에 실패했습니다. 내용을 잃지 않으려면 「전체 저장」 후 다시 이동해 주세요.",
+          );
+          return;
+        }
+      }
+      setEditorPanel("chapter");
+      setActiveChapterId(id);
+    },
+    [activeChapterId, editorPanel, flushActiveChapter],
+  );
 
-  const selectBookCover = useCallback(() => {
+  const selectBookCover = useCallback(async () => {
+    if (editorPanel === "chapter") {
+      const ok = await flushActiveChapter();
+      if (!ok) {
+        alert(
+          "챕터 저장에 실패했습니다. 내용을 잃지 않으려면 「전체 저장」 후 다시 이동해 주세요.",
+        );
+        return;
+      }
+    }
     setEditorPanel("book-cover");
-  }, []);
+  }, [editorPanel, flushActiveChapter]);
 
   const publish = async () => {
     setPublishing(true);
     setMessage("");
+    const saved = await saveAll();
+    if (!saved) {
+      setPublishing(false);
+      setMessage("저장에 실패해 출판을 중단했습니다. 「전체 저장」 후 다시 출판해 주세요.");
+      return;
+    }
     const res = await fetch(`/api/publish/${bookId}`, { method: "POST" });
     const data = await res.json();
     setPublishing(false);
@@ -472,17 +655,35 @@ export function EditorWorkspace({
         </button>
         <button
           type="button"
-          onClick={() => setPreviewOpen(true)}
-          disabled={chapters.length === 0}
+          onClick={() => setReaderPanelOpen((open) => !open)}
+          title="타겟 독자 분석 패널 열기/닫기"
+          aria-pressed={readerPanelOpen}
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+            readerPanelOpen
+              ? "border-violet-400 bg-violet-100 text-violet-950"
+              : "border-violet-300 bg-violet-50 text-violet-950 hover:bg-violet-100"
+          }`}
+        >
+          독자
+        </button>
+        <a
+          href={`/admin/books/${bookId}/preview`}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-disabled={chapters.length === 0}
           title={
             chapters.length === 0
               ? "챕터를 추가한 뒤 미리볼 수 있습니다"
-              : "현재 저장된 내용 기준 독자 화면 미리보기"
+              : "독자 화면을 새 탭에서 열기 (저장된 내용 기준)"
           }
-          className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 disabled:cursor-not-allowed disabled:opacity-40"
+          className={`rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 ${
+            chapters.length === 0
+              ? "pointer-events-none opacity-40"
+              : "hover:bg-stone-50"
+          }`}
         >
           독자 미리보기
-        </button>
+        </a>
         <button
           type="button"
           onClick={publish}
@@ -492,12 +693,6 @@ export function EditorWorkspace({
           {publishing ? "출판 중..." : "출판"}
         </button>
       </header>
-
-      <DevicePreviewModal
-        bookId={bookId}
-        open={previewOpen}
-        onClose={() => setPreviewOpen(false)}
-      />
 
       {message && (
         <div className="whitespace-pre-wrap bg-green-50 px-4 py-2 text-sm text-green-800">
@@ -520,30 +715,50 @@ export function EditorWorkspace({
           onRename={renameChapter}
           onReorder={reorderChapters}
         />
-        {editorPanel === "book-cover" ? (
-          <BookCoverEditor
-            title={book.title}
-            subtitle={book.subtitle}
-            cover={{
-              cover_bg_color: book.cover_bg_color,
-              cover_title_color: book.cover_title_color,
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {editorPanel === "book-cover" ? (
+            <BookCoverEditor
+              title={book.title}
+              subtitle={book.subtitle}
+              cover={{
+                cover_bg_color: book.cover_bg_color,
+                cover_title_color: book.cover_title_color,
+              }}
+              onCoverChange={(patch) => void updateCoverStyle(patch)}
+            />
+          ) : activeChapter ? (
+            <BookEditor
+              ref={editorRef}
+              key={activeChapter.id}
+              chapterId={activeChapter.id}
+              chapterTitle={activeChapter.title}
+              bookId={bookId}
+              initialContent={activeChapter.content_json}
+              initialContentHtml={activeChapter.content_html}
+              onContentChange={updateChapterContent}
+              onSave={saveChapter}
+              onSaveState={setSaveState}
+            />
+          ) : null}
+        </div>
+        {readerPanelOpen && (
+          <ReaderAnalysisPanel
+            pitch={readerPitch}
+            onPitchChange={setReaderPitch}
+            onPitchBlur={() => {
+              void saveReaderPitch(readerPitch).catch(() => {
+                setReaderError("책 요약 저장에 실패했습니다. 「전체 저장」을 눌러 주세요.");
+              });
             }}
-            onCoverChange={(patch) => void updateCoverStyle(patch)}
+            report={readerReport}
+            loading={readerLoading}
+            error={readerError}
+            provider={readerProvider}
+            includeSample={readerIncludeSample}
+            onIncludeSampleChange={setReaderIncludeSample}
+            onAnalyze={() => void runReaderAnalysis()}
           />
-        ) : activeChapter ? (
-          <BookEditor
-            ref={editorRef}
-            key={activeChapter.id}
-            chapterId={activeChapter.id}
-            chapterTitle={activeChapter.title}
-            bookId={bookId}
-            initialContent={activeChapter.content_json}
-            initialContentHtml={activeChapter.content_html}
-            onContentChange={updateChapterContent}
-            onSave={saveChapter}
-            onSaveState={setSaveState}
-          />
-        ) : null}
+        )}
       </div>
     </div>
   );

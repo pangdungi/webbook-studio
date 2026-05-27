@@ -7,6 +7,7 @@ import {
   normalizeCoverColor,
 } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
+import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
@@ -69,6 +70,21 @@ export async function PATCH(request: Request, context: RouteContext) {
       body.cover_title_color,
       DEFAULT_COVER_TITLE,
     );
+  }
+  if (typeof body.reader_pitch === "string") {
+    updates.reader_pitch = body.reader_pitch;
+  }
+  if (body.reader_analysis === null) {
+    updates.reader_analysis = null;
+  } else if (body.reader_analysis !== undefined) {
+    const report = normalizeReaderAnalysisReport(body.reader_analysis);
+    if (!report) {
+      return NextResponse.json(
+        { error: "reader_analysis 형식이 올바르지 않습니다." },
+        { status: 400 },
+      );
+    }
+    updates.reader_analysis = report;
   }
 
   const { data, error } = await supabase

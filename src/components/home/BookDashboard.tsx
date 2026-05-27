@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { DevicePreviewModal } from "@/components/reader/DevicePreviewModal";
 import { CopyField } from "@/components/home/CopyField";
 import { createClient } from "@/lib/supabase/client";
 import type { Book } from "@/lib/types/database";
@@ -14,7 +13,6 @@ export function BookDashboard() {
   const router = useRouter();
   const [books, setBooks] = useState<BookListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [previewBookId, setPreviewBookId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const loadBooks = useCallback(async () => {
@@ -218,13 +216,14 @@ export function BookDashboard() {
                   >
                     편집
                   </Link>
-                  <button
-                    type="button"
-                    onClick={() => setPreviewBookId(book.id)}
-                    className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-700"
+                  <a
+                    href={`/admin/books/${book.id}/preview`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
                   >
                     미리보기
-                  </button>
+                  </a>
                   {isPublished && book.readerUrl && (
                     <a
                       href={book.readerUrl}
@@ -251,13 +250,6 @@ export function BookDashboard() {
         </>
       )}
 
-      {previewBookId && (
-        <DevicePreviewModal
-          bookId={previewBookId}
-          open={Boolean(previewBookId)}
-          onClose={() => setPreviewBookId(null)}
-        />
-      )}
     </div>
   );
 }

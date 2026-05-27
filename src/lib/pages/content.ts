@@ -119,10 +119,26 @@ export function chapterContentToJson(pages: BookPage[]): ChapterContentV2 {
   return { version: CHAPTER_CONTENT_VERSION, pages };
 }
 
-/** 저장용 content_html — 레거시 API 호환 */
-export function chapterPagesToStorageHtml(pages: BookPage[]): string {
-  return pages
-    .filter((p) => p.kind === "content")
-    .map((p) => p.content_html)
-    .join("\n");
+/** TipTap JSON — 본문 단락 class 유지 (페이지 전환 시 들여쓰기 깨짐 방지) */
+export function normalizeContentPageDoc(
+  doc: Record<string, unknown>,
+): Record<string, unknown> {
+  if (doc.type !== "doc" || !Array.isArray(doc.content)) return doc;
+
+  return {
+    ...doc,
+    content: (doc.content as Record<string, unknown>[]).map((node) => {
+      if (node?.type !== "paragraph") return node;
+      const attrs = (node.attrs as Record<string, unknown> | undefined) ?? {};
+      return {
+        ...node,
+        attrs: { ...attrs, class: attrs.class ?? "book-body-p" },
+      };
+    }),
+  };
+}
+
+/** 저장용 chapter.content_html — 페이지는 content_json.pages[]에만 저장 (합치지 않음) */
+export function chapterPagesToStorageHtml(_pages: BookPage[]): string {
+  return "";
 }

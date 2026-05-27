@@ -5,9 +5,19 @@ export const BOOK_PAGE_REF_WIDTH = "42rem";
 export const BOOK_PAGE_ASPECT = "297 / 210";
 export const BOOK_PAGE_WIDTH_VAR = "--book-page-w";
 export const BOOK_PAGE_HEIGHT_VAR = "--book-page-h";
+/** 리더 뷰포트 — EpubViewer가 px로 주입 */
+export const READER_VIEWPORT_W_VAR = "--wbs-reader-vw";
+export const READER_VIEWPORT_H_VAR = "--wbs-reader-vh";
+
+export const bookPageShellFlowClass = "book-page-shell--flow";
+export const bookPageShellSplashClass = "book-page-shell--splash";
+
+export type ReaderPageLayoutMode = "scroll" | "paginated";
 
 export const bookPageClass = "book-page";
 export const bookPageBodyClass = "book-page__body";
+/** 독자 페이지 모드 — 이전 화면에서 이어지는 첫 문단(들여쓰기 없음) */
+export const bookBodyContinueClass = "book-body-p--continue";
 export const bookPageShellClass = "book-page-shell";
 export const bookPageCoverClass = "book-page--cover";
 export const bookPageBookCoverClass = "book-page--book-cover";
@@ -44,9 +54,7 @@ function pageBoxCss(p: string, important = false) {
       box-sizing: border-box${i};
       height: 100%${i};
       max-height: 100%${i};
-      overflow-x: hidden${i};
-      overflow-y: auto${i};
-      -webkit-overflow-scrolling: touch${i};
+      overflow: hidden${i};
     }
     ${p}.${bookPageCoverClass} {
       background-color: #f5f5f4${i};
@@ -106,6 +114,7 @@ function pageBoxCss(p: string, important = false) {
       max-width: 100%${i};
       font-size: 1.05rem${i};
       line-height: 1.5${i};
+      text-align: left${i};
       color: var(--book-cover-title-color, #ffffff)${i};
       opacity: 0.85${i};
       white-space: pre-line${i};
@@ -176,6 +185,207 @@ export function bookPageCanvasCss(scope = "") {
   `;
 }
 
+/** EPUB iframe — html/body (스크롤은 epub-container) */
+function bookPageReaderScrollRootCss(important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    html {
+      height: auto${i};
+      overflow-y: visible${i};
+      scrollbar-width: none${i};
+      -ms-overflow-style: none${i};
+    }
+    html::-webkit-scrollbar {
+      display: none${i};
+      width: 0${i};
+      height: 0${i};
+    }
+    body {
+      margin: 0${i};
+      padding: 0${i};
+      background-color: #fafaf9${i};
+      min-height: 0${i};
+      overflow-x: hidden${i};
+      overflow-y: visible${i};
+      scrollbar-width: none${i};
+      -ms-overflow-style: none${i};
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: stretch${i};
+    }
+    body::-webkit-scrollbar {
+      display: none${i};
+      width: 0${i};
+      height: 0${i};
+    }
+  `;
+}
+
+/** 스크롤 레이아웃 — HTML 한 덩어리·EPUB continuous 공통 (html/body 규칙 없음) */
+export function bookPageReaderScrollLayoutCss(important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    .${bookPageShellClass} {
+      width: 100%${i};
+      max-width: none${i};
+      flex-shrink: 0${i};
+      box-sizing: border-box${i};
+      gap: 0${i};
+    }
+    .${bookPageShellFlowClass} {
+      margin-bottom: 1.25rem${i};
+    }
+    .${bookPageShellFlowClass}:last-child {
+      margin-bottom: 0${i};
+    }
+    .${bookPageShellClass} .${bookPageClass} {
+      width: var(${BOOK_PAGE_WIDTH_VAR}, 100%)${i};
+      max-width: 100%${i};
+    }
+    .${bookPageShellClass}:not(.${bookPageShellSplashClass}) .${bookPageClass}.${bookPageContentClass} {
+      height: auto${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, 12rem)${i};
+      max-height: none${i};
+      overflow: visible${i};
+    }
+    .${bookPageShellClass}:not(.${bookPageShellSplashClass}) .${bookPageClass}.${bookPageContentClass} .${bookPageBodyClass} {
+      height: auto${i};
+      max-height: none${i};
+      overflow: visible${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageClass} {
+      width: var(${BOOK_PAGE_WIDTH_VAR}, 100%)${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100vh))${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100vh))${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100vh))${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageCoverClass},
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} {
+      align-items: flex-start${i};
+      justify-content: flex-start${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageCoverClass} h1.${bookChapterTitleClass} {
+      margin: 0${i};
+      text-align: left${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} h1.${bookBookTitleClass},
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} .book-book-subtitle {
+      text-align: left${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageQuoteClass} .${bookPageBodyClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      justify-content: center${i};
+      align-items: flex-end${i};
+      height: 100%${i};
+    }
+    .${bookPageShellSplashClass}:only-child {
+      min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+    }
+  `;
+}
+
+/** EPUB·리더 — 스크롤: 세로 흰 종이 + 본문 장 간격 / 장·명언·표지 = 한 화면 높이 */
+export function bookPageReaderScrollCss(important = false) {
+  return `${bookPageReaderScrollRootCss(important)}${bookPageReaderScrollLayoutCss(important)}`;
+}
+
+/** HTML 스크롤 리더 페이지 모드 — 뷰포트 내부만 (전역 html/body 규칙 없음) */
+export function bookPageReaderPaginatedInViewportCss(important = false) {
+  const scope = ".reader-scroll-viewport--paginated";
+  const i = important ? " !important" : "";
+
+  return `
+    ${scope} .${bookPageShellClass} {
+      width: 100%${i};
+      height: 100%${i};
+      max-width: none${i};
+      margin: 0${i};
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: stretch${i};
+      justify-content: stretch${i};
+    }
+    ${scope} .${bookPageShellClass} .${bookPageClass} {
+      width: var(${BOOK_PAGE_WIDTH_VAR}, 100%)${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      margin: 0${i};
+      flex: 1 1 auto${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageCoverClass},
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} {
+      align-items: flex-start${i};
+      justify-content: flex-start${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageCoverClass} h1.${bookChapterTitleClass},
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} h1.${bookBookTitleClass},
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} .book-book-subtitle {
+      text-align: left${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageQuoteClass} .${bookPageBodyClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      justify-content: center${i};
+      align-items: flex-end${i};
+      height: 100%${i};
+    }
+  `;
+}
+
+/** EPUB·리더 — 페이지 넘김: 가로 한 화면 = 종이 한 장(높이=뷰포트) */
+export function bookPageReaderPaginatedCss(important = false) {
+  const i = important ? " !important" : "";
+
+  return `
+    html, body {
+      height: 100%${i};
+      margin: 0${i};
+      padding: 0${i};
+      overflow: hidden${i};
+      background-color: #fafaf9${i};
+    }
+    .${bookPageShellClass} {
+      width: 100%${i};
+      height: 100%${i};
+      max-width: none${i};
+      margin: 0${i};
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: stretch${i};
+      justify-content: stretch${i};
+    }
+    .${bookPageShellClass} .${bookPageClass} {
+      width: var(${BOOK_PAGE_WIDTH_VAR}, 100%)${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, 100%)${i};
+      margin: 0${i};
+      flex: 1 1 auto${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageCoverClass},
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} {
+      align-items: flex-start${i};
+      justify-content: flex-start${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageCoverClass} h1.${bookChapterTitleClass},
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} h1.${bookBookTitleClass},
+    .${bookPageShellSplashClass} .${bookPageBookCoverClass} .book-book-subtitle {
+      text-align: left${i};
+    }
+    .${bookPageShellSplashClass} .${bookPageQuoteClass} .${bookPageBodyClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      justify-content: center${i};
+      align-items: flex-end${i};
+      height: 100%${i};
+    }
+  `;
+}
+
 /** EPUB·리더 */
 export function bookPageReaderCss(important = false) {
   const i = important ? " !important" : "";
@@ -192,6 +402,7 @@ export function bookPageReaderCss(important = false) {
       margin: 0${i};
       padding: 1rem${i};
       background-color: #fafaf9${i};
+      overflow-x: hidden${i};
     }
     @media (min-width: 640px) {
       body { padding: 1.5rem${i}; }
@@ -211,8 +422,11 @@ export function bookPageEditorShellCss() {
       box-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 6px 20px rgb(0 0 0 / 0.06);
       border-radius: 2px;
     }
+    .book-page--content .${bookPageBodyClass} {
+      overflow-y: hidden;
+    }
     .book-page--content .ProseMirror {
-      min-height: 100%;
+      min-height: 12rem;
       outline: none;
     }
     .book-page--quote textarea {
@@ -237,11 +451,108 @@ export function bookPageEditorShellCss() {
   `;
 }
 
-/** shell 기준으로 모든 페이지 동일 너비·높이 (A4 비율) */
-export function syncBookPageMetrics(shell: HTMLElement) {
-  const w = shell.clientWidth;
+function readerViewportStyleTarget(
+  root: Document | HTMLElement | null | undefined,
+): HTMLElement | null {
+  if (!root) return null;
+  if (root instanceof HTMLElement) return root;
+  if (root instanceof Document) {
+    return root.documentElement ?? root.body ?? null;
+  }
+  return null;
+}
+
+export function syncReaderViewportVars(
+  root: Document | HTMLElement | null | undefined,
+  width: number,
+  height: number,
+) {
+  const el = readerViewportStyleTarget(root);
+  if (!el?.style) return;
+
+  if (width > 0) {
+    el.style.setProperty(READER_VIEWPORT_W_VAR, `${width}px`);
+  }
+  if (height > 0) {
+    el.style.setProperty(READER_VIEWPORT_H_VAR, `${height}px`);
+  }
+}
+
+function isSplashPageArticle(article: Element): boolean {
+  return (
+    article.classList.contains(bookPageCoverClass) ||
+    article.classList.contains(bookPageQuoteClass) ||
+    article.classList.contains(bookPageBookCoverClass)
+  );
+}
+
+/** 편집기: shell 너비 기준 A4. 리더: scroll/paginated + 본문/스플래시 구분 */
+export function syncBookPageMetrics(
+  shell: HTMLElement,
+  options?: {
+    mode?: ReaderPageLayoutMode;
+    pageWidth?: number;
+    pageHeight?: number;
+  },
+) {
+  const measuredW = shell.clientWidth;
+  const w =
+    options?.pageWidth && options.pageWidth > 0 ? options.pageWidth : measuredW;
   if (w <= 0) return;
-  const h = Math.round(w * (297 / 210));
+
+  const article = shell.querySelector(`.${bookPageClass}`);
+  const mode = options?.mode;
+  const rootEl =
+    shell.ownerDocument?.documentElement ?? shell.ownerDocument?.body ?? null;
+  const readerVh = rootEl
+    ? parseFloat(getComputedStyle(rootEl).getPropertyValue(READER_VIEWPORT_H_VAR))
+    : 0;
+  const readerVw = rootEl
+    ? parseFloat(getComputedStyle(rootEl).getPropertyValue(READER_VIEWPORT_W_VAR))
+    : 0;
+
   shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, `${w}px`);
+
+  if (!mode) {
+    const h = Math.round(w * (297 / 210));
+    shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${h}px`);
+    return;
+  }
+
+  const splash = article && isSplashPageArticle(article);
+
+  if (mode === "paginated") {
+    const pw =
+      options?.pageWidth && options.pageWidth > 0
+        ? options.pageWidth
+        : readerVw > 0
+          ? readerVw
+          : w;
+    const ph =
+      options?.pageHeight && options.pageHeight > 0
+        ? options.pageHeight
+        : readerVh > 0
+          ? readerVh
+          : shell.clientHeight;
+    shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, `${pw}px`);
+    shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${ph}px`);
+    return;
+  }
+
+  if (mode === "scroll") {
+    if (splash && readerVh > 0) {
+      shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${readerVh}px`);
+    } else {
+      shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+    }
+    return;
+  }
+
+  if (splash && readerVh > 0) {
+    shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${readerVh}px`);
+    return;
+  }
+
+  const h = Math.round(w * (297 / 210));
   shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${h}px`);
 }

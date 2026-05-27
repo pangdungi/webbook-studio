@@ -11,7 +11,8 @@ export function useEpubBlobUrl(epubUrl: string) {
   useEffect(() => {
     if (!epubUrl) {
       setLoading(false);
-      setError("EPUB 주소가 없습니다.");
+      setEpubData(null);
+      setError(null);
       return;
     }
 

@@ -23,21 +23,10 @@ export function clearReaderSessionCookie(response: NextResponse, secure: boolean
   });
 }
 
-/** /read/abc123, /read/abc123/, /read/abc123/epub */
+/** /read/abc123 또는 /read/abc123/ */
 export function parseReaderTokenFromPath(pathname: string): string | null {
-  const match = pathname.match(/^\/read\/([^/]+)(?:\/epub)?\/?$/);
+  const match = pathname.match(/^\/read\/([^/]+)\/?$/);
   return match?.[1] ?? null;
-}
-
-/** URL에 있는 토큰이 쿠키보다 우선 (새 출판 링크가 예전 쿠키에 가로채이지 않음) */
-export function resolveReaderToken(
-  cookieToken: string | undefined,
-  pathToken: string | null,
-  isAdmin: boolean,
-): string | undefined {
-  if (isAdmin) return undefined;
-  if (pathToken) return pathToken;
-  return cookieToken;
 }
 
 export function isReaderAllowedPath(pathname: string): boolean {
@@ -55,9 +44,14 @@ export function readerEpubPath(token: string) {
   return `/read/${token}/epub`;
 }
 
+export function readerScrollPath(token: string) {
+  return `/read/${token}/scroll`;
+}
+
 /** 독자 세션일 때 이 토큰의 책 경로만 허용 */
 export function isReaderPathForToken(pathname: string, token: string): boolean {
   if (pathname === readerBookPath(token)) return true;
   if (pathname === readerEpubPath(token)) return true;
+  if (pathname === readerScrollPath(token)) return true;
   return false;
 }

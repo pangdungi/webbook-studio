@@ -7,10 +7,9 @@ export const BookParagraph = Paragraph.extend({
       class: {
         default: "book-body-p",
         parseHTML: (element) => element.getAttribute("class"),
-        renderHTML: (attributes) => {
-          if (!attributes.class) return {};
-          return { class: attributes.class };
-        },
+        renderHTML: (attributes) => ({
+          class: attributes.class || "book-body-p",
+        }),
       },
     };
   },

@@ -1,4 +1,5 @@
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
+import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
 
 export type UserRole = "admin" | "reader";
 export type BookStatus = "draft" | "published";
@@ -23,6 +24,8 @@ export type Book = {
   status: BookStatus;
   epub_storage_path: string | null;
   published_at: string | null;
+  reader_pitch: string;
+  reader_analysis: ReaderAnalysisReport | null;
   created_by: string;
   created_at: string;
   updated_at: string;

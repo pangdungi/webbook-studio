@@ -3,6 +3,7 @@ import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
+import { normalizeBookReaderFields } from "@/lib/books/readerFields";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -36,6 +37,7 @@ export default async function EditBookPage({ params }: PageProps) {
         ...book,
         ...normalizeBookCoverStyle(book),
         heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+        ...normalizeBookReaderFields(book),
       }}
       initialChapters={chapters ?? []}
     />
