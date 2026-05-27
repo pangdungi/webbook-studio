@@ -238,6 +238,7 @@ export function WebBookReader({
               fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
               progressStorageKey={progressStorageKey}
+              readerChromeOpen={chromeOpen}
               onTocReady={handleTocReady}
               onReadingAreaTap={handleReadingAreaTap}
             />

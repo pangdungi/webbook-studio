@@ -89,6 +89,7 @@ export function readerScrollSurfaceCss(
     .reader-scroll-viewport--scroll {
       overflow-x: hidden${i};
       overflow-y: auto${i};
+      overflow-anchor: none${i};
       touch-action: pan-y${i};
       background-color: #ffffff${i};
     }

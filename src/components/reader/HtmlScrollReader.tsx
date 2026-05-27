@@ -50,6 +50,8 @@ type Props = {
   protectContent?: boolean;
   /** localStorage 키 접미사 — 독자 token 또는 preview:bookId */
   progressStorageKey?: string;
+  /** 메뉴(크롬) 열림 — 모바일에서 레이아웃 변동 후 스크롤 복원 */
+  readerChromeOpen?: boolean;
   onTocReady?: (toc: ReaderTocEntry[]) => void;
   onReadingAreaTap?: () => void;
 };
@@ -71,6 +73,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       fontSizePercent = "100%",
       protectContent = false,
       progressStorageKey,
+      readerChromeOpen = false,
       onTocReady,
       onReadingAreaTap,
     },
@@ -81,6 +84,8 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const pageIndexRef = useRef(0);
     const restoredOnceRef = useRef(false);
     const scrollLayoutReadyRef = useRef(false);
+    const lastKnownScrollTopRef = useRef(0);
+    const lastScrollLayoutWidthRef = useRef(0);
     const lastPaginatedWidthRef = useRef(0);
     const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -151,6 +156,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
         if (anchor) {
           viewport.scrollTop = anchor.offsetTop + (saved.scrollTop ?? 0);
+          lastKnownScrollTopRef.current = viewport.scrollTop;
           return;
         }
 
@@ -161,6 +167,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           viewport.getBoundingClientRect().top +
           viewport.scrollTop;
         viewport.scrollTop = top + (saved.scrollTop ?? 0);
+        lastKnownScrollTopRef.current = viewport.scrollTop;
       },
       [],
     );
@@ -303,9 +310,19 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       if (h <= 0) return;
 
-      const scrollTopToPreserve = scrollLayoutReadyRef.current
-        ? viewport.scrollTop
-        : null;
+      const layoutW = Math.round(w);
+      if (
+        scrollLayoutReadyRef.current &&
+        layoutW === lastScrollLayoutWidthRef.current
+      ) {
+        return;
+      }
+      lastScrollLayoutWidthRef.current = layoutW;
+
+      const scrollTopToPreserve =
+        scrollLayoutReadyRef.current || lastKnownScrollTopRef.current > 0
+          ? lastKnownScrollTopRef.current
+          : null;
 
       viewport.style.backgroundColor = "#ffffff";
       viewport.style.removeProperty(READER_SLIDE_W_VAR);
@@ -326,8 +343,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       applyScrollFullBleedLayout(surface, w);
 
       const finishScrollLayout = () => {
-        if (scrollTopToPreserve !== null) {
+        if (scrollTopToPreserve !== null && scrollTopToPreserve > 0) {
           viewport.scrollTop = scrollTopToPreserve;
+          lastKnownScrollTopRef.current = scrollTopToPreserve;
         } else if (progressStorageKey && !restoredOnceRef.current) {
           const saved = loadReadingProgress(progressStorageKey);
           restoredOnceRef.current = true;
@@ -339,6 +357,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       requestAnimationFrame(() => {
         finishScrollLayout();
         requestAnimationFrame(finishScrollLayout);
+        setTimeout(finishScrollLayout, 0);
       });
     }, [
       paginated,
@@ -403,9 +422,15 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     useEffect(() => {
       restoredOnceRef.current = false;
       scrollLayoutReadyRef.current = false;
+      lastKnownScrollTopRef.current = 0;
+      lastScrollLayoutWidthRef.current = 0;
       lastPaginatedWidthRef.current = 0;
       if (!progressStorageKey) pageIndexRef.current = 0;
     }, [bodyHtml, viewMode, progressStorageKey]);
+
+    useEffect(() => {
+      lastScrollLayoutWidthRef.current = 0;
+    }, [fontSizePercent]);
 
     const goPaginatedPrev = useCallback(
       () => applyPaginatedSlide(pageIndexRef.current - 1, true),
@@ -437,7 +462,16 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       const detachTap = attachReadingSurfaceTap(viewport, onTap);
 
       syncLayout();
-      const ro = new ResizeObserver(() => syncLayout());
+      const ro = new ResizeObserver(() => {
+        if (
+          !paginated &&
+          scrollLayoutReadyRef.current &&
+          Math.round(viewport.clientWidth) === lastScrollLayoutWidthRef.current
+        ) {
+          return;
+        }
+        syncLayout();
+      });
       ro.observe(viewport);
 
       return () => {
@@ -464,12 +498,35 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       };
     }, [bodyHtml, viewMode, persistProgress, progressStorageKey]);
 
+    const restoreKnownScroll = useCallback(() => {
+      const viewport = viewportRef.current;
+      if (!viewport || paginated) return;
+      const top = lastKnownScrollTopRef.current;
+      if (top <= 0) return;
+      const apply = () => {
+        viewport.scrollTop = top;
+      };
+      apply();
+      requestAnimationFrame(apply);
+      requestAnimationFrame(() => requestAnimationFrame(apply));
+      setTimeout(apply, 50);
+      setTimeout(apply, 150);
+    }, [paginated]);
+
+    useEffect(() => {
+      if (!readerChromeOpen || paginated) return;
+      restoreKnownScroll();
+    }, [readerChromeOpen, paginated, restoreKnownScroll]);
+
     useEffect(() => {
       if (!progressStorageKey || paginated) return;
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      const onScroll = () => schedulePersistProgress();
+      const onScroll = () => {
+        lastKnownScrollTopRef.current = viewport.scrollTop;
+        schedulePersistProgress();
+      };
       viewport.addEventListener("scroll", onScroll, { passive: true });
 
       return () => {
