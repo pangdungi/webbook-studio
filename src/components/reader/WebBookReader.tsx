@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { NavItem } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
@@ -59,6 +59,7 @@ export function WebBookReader({
   const [toc, setToc] = useState<NavItem[]>([]);
   const readerNavRef = useRef<HtmlScrollReaderHandle | null>(null);
   const readerAreaRef = useRef<HTMLDivElement>(null);
+  const scrollPinOnChromeRef = useRef<number | null>(null);
 
   const scrollUrl = scrollUrlFromEpubUrl(epubUrl);
   const { content, loading, error } = useReaderScrollContent(scrollUrl);
@@ -100,8 +101,34 @@ export function WebBookReader({
 
   const handleReadingAreaTap = useCallback(() => {
     if (tocOpen) return;
+    if (viewMode === "scroll") {
+      const viewport = readerAreaRef.current?.querySelector(
+        ".reader-scroll-viewport--scroll",
+      );
+      if (viewport instanceof HTMLElement) {
+        scrollPinOnChromeRef.current = viewport.scrollTop;
+      }
+    }
     setChromeOpen((open) => !open);
-  }, [tocOpen]);
+  }, [tocOpen, viewMode]);
+
+  useLayoutEffect(() => {
+    if (viewMode !== "scroll") return;
+    const pin = scrollPinOnChromeRef.current;
+    if (pin == null) return;
+    const viewport = readerAreaRef.current?.querySelector(
+      ".reader-scroll-viewport--scroll",
+    );
+    if (!(viewport instanceof HTMLElement)) return;
+    viewport.scrollTop = pin;
+    scrollPinOnChromeRef.current = null;
+    requestAnimationFrame(() => {
+      viewport.scrollTop = pin;
+      requestAnimationFrame(() => {
+        viewport.scrollTop = pin;
+      });
+    });
+  }, [chromeOpen, viewMode]);
 
   useEffect(() => {
     if (!protectContent) return;

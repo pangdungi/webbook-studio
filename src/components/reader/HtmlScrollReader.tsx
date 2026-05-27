@@ -85,12 +85,51 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const forceScrollRelayoutRef = useRef(true);
     const lastScrollLayoutWidthRef = useRef(0);
     const lastPaginatedWidthRef = useRef(0);
+    /** 탭·주소창 resize 시 --wbs-reader-vh 변동 방지 (스플래시 높이 줄며 scroll 튐) */
+    const lockedScrollVhRef = useRef(0);
     const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     onReadingAreaTapRef.current = onReadingAreaTap;
     const sourceBodyHtmlRef = useRef(bodyHtml);
     sourceBodyHtmlRef.current = bodyHtml;
     const paginated = viewMode === "paginated";
+
+    const scrollViewportHeight = useCallback(
+      (viewport: HTMLElement, measuredH: number) => {
+        if (lockedScrollVhRef.current > 0) return lockedScrollVhRef.current;
+        return Math.max(measuredH, 1);
+      },
+      [],
+    );
+
+    const syncScrollViewportVars = useCallback(
+      (
+        viewport: HTMLElement,
+        surface: HTMLElement,
+        width: number,
+        measuredH: number,
+      ) => {
+        const h = scrollViewportHeight(viewport, measuredH);
+        const doc = surface.ownerDocument;
+        if (doc) syncReaderViewportVars(doc.documentElement, width, h);
+        syncReaderViewportVars(surface, width, h);
+      },
+      [scrollViewportHeight],
+    );
+
+    const pinScrollTop = useCallback((top: number) => {
+      const viewport = viewportRef.current;
+      if (!viewport || top < 0) return;
+      viewport.scrollTop = top;
+      lastKnownScrollTopRef.current = top;
+      requestAnimationFrame(() => {
+        viewport.scrollTop = top;
+        requestAnimationFrame(() => {
+          viewport.scrollTop = top;
+          lastKnownScrollTopRef.current = viewport.scrollTop;
+        });
+      });
+    }, []);
 
     const persistProgress = useCallback(() => {
       if (!progressStorageKey) return;
@@ -312,13 +351,12 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       const h = viewport.clientHeight;
       if (w <= 0) return;
 
-      const doc = surface.ownerDocument;
-      if (doc) {
-        syncReaderViewportVars(doc.documentElement, w, Math.max(h, 1));
-        syncReaderViewportVars(surface, w, Math.max(h, 1));
-      }
-
       if (paginated) {
+        const doc = surface.ownerDocument;
+        if (doc) {
+          syncReaderViewportVars(doc.documentElement, w, Math.max(h, 1));
+          syncReaderViewportVars(surface, w, Math.max(h, 1));
+        }
         if (w !== lastPaginatedWidthRef.current) {
           lastPaginatedWidthRef.current = w;
           runPaginatedLayout();
@@ -327,6 +365,8 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       }
 
       if (h <= 0) return;
+
+      syncScrollViewportVars(viewport, surface, w, h);
 
       const layoutW = Math.round(w);
       if (scrollLayoutReadyRef.current && !forceScrollRelayoutRef.current) {
@@ -366,6 +406,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           viewport.scrollTop = pinnedTop;
         }
         lastKnownScrollTopRef.current = viewport.scrollTop;
+        if (lockedScrollVhRef.current <= 0) {
+          lockedScrollVhRef.current = Math.max(viewport.clientHeight, 1);
+        }
         scrollLayoutReadyRef.current = true;
       };
 
@@ -376,6 +419,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       runPaginatedLayout,
       progressStorageKey,
       restoreScrollProgress,
+      syncScrollViewportVars,
     ]);
 
     const scrollToAnchor = useCallback(
@@ -435,6 +479,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       scrollLayoutReadyRef.current = false;
       forceScrollRelayoutRef.current = true;
       lastKnownScrollTopRef.current = 0;
+      lockedScrollVhRef.current = 0;
       lastScrollLayoutWidthRef.current = 0;
       lastPaginatedWidthRef.current = 0;
       if (!progressStorageKey) pageIndexRef.current = 0;
@@ -473,7 +518,11 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       const onTap = () => {
         if (!paginated) {
-          lastKnownScrollTopRef.current = viewport.scrollTop;
+          const top = viewport.scrollTop;
+          lastKnownScrollTopRef.current = top;
+          onReadingAreaTapRef.current?.();
+          pinScrollTop(top);
+          return;
         }
         onReadingAreaTapRef.current?.();
       };
@@ -493,20 +542,16 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         const h = viewport.clientHeight;
         if (w <= 0) return;
 
-        const doc = surface.ownerDocument;
-        if (doc) {
-          syncReaderViewportVars(doc.documentElement, w, Math.max(h, 1));
-          syncReaderViewportVars(surface, w, Math.max(h, 1));
-        }
-
         if (!scrollLayoutReadyRef.current) {
           syncLayout();
           return;
         }
 
+        syncScrollViewportVars(viewport, surface, w, h);
+
         const pinned = lastKnownScrollTopRef.current;
         if (pinned > 0 && Math.abs(viewport.scrollTop - pinned) > 8) {
-          viewport.scrollTop = pinned;
+          pinScrollTop(pinned);
         }
       };
       window.addEventListener("resize", onWindowResize);
@@ -515,7 +560,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         detachTap();
         window.removeEventListener("resize", onWindowResize);
       };
-    }, [bodyHtml, paginated, protectContent, syncLayout]);
+    }, [bodyHtml, paginated, protectContent, syncLayout, pinScrollTop, syncScrollViewportVars]);
 
     useEffect(() => {
       if (!paginated) {
