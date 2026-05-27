@@ -125,6 +125,97 @@ function pageBoxCss(p: string, important = false) {
   `;
 }
 
+/** 스크롤 리더 — 표지·장표지·명언 (가로 100%, pageBoxCss 본문 규칙 제외) */
+export function bookPageScrollSplashPageCss(scope: string, important = false) {
+  const p = scope ? `${scope} ` : "";
+  const i = important ? " !important" : "";
+
+  return `
+    ${p}.${bookPageShellSplashClass} .${bookPageClass} {
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: none${i};
+      min-width: 100%${i};
+      margin: 0${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+      flex-shrink: 0${i};
+      overflow: hidden${i};
+      position: relative${i};
+      font-family: ${bookBodyFontFamily}${i};
+      font-size: 100%${i};
+      line-height: 1.75${i};
+    }
+    ${p}.${bookPageCoverClass} {
+      background-color: #f5f5f4${i};
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: flex-start${i};
+      justify-content: flex-start${i};
+      padding: 3rem 2rem 2.5rem${i};
+    }
+    ${p}.${bookPageCoverClass} .${bookPageBodyClass} {
+      overflow: hidden${i};
+    }
+    ${p}.${bookPageCoverClass} h1.${bookChapterTitleClass} {
+      display: inline-block${i};
+      box-sizing: border-box${i};
+      max-width: 100%${i};
+      margin: 0${i};
+      padding: 1.1em 1.75em${i};
+      border: 2px solid #1c1917${i};
+      font-family: var(--wbs-font-chapter, ${bookBodyFontFamily})${i};
+      font-size: 1.55em${i};
+      font-weight: 700${i};
+      line-height: 1.45${i};
+      text-align: left${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
+      color: #0c0a09${i};
+    }
+    ${p}.${bookPageBookCoverClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: stretch${i};
+      justify-content: flex-start${i};
+      background-color: var(--book-cover-bg, #2d4a6f)${i};
+      padding: 5.5rem 2rem 2.5rem 3rem${i};
+    }
+    ${p}.${bookPageBookCoverClass} .${bookPageBodyClass} {
+      overflow: hidden${i};
+    }
+    ${p}.${bookPageBookCoverClass} h1.${bookBookTitleClass} {
+      margin: 0${i};
+      max-width: 100%${i};
+      font-family: var(--wbs-font-chapter, ${bookBodyFontFamily})${i};
+      font-size: clamp(1.75rem, 6vw, 2.75rem)${i};
+      font-weight: 700${i};
+      line-height: 1.25${i};
+      letter-spacing: -0.02em${i};
+      text-align: left${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
+      color: var(--book-cover-title-color, #ffffff)${i};
+    }
+    ${p}.${bookPageBookCoverClass} .book-book-subtitle {
+      margin: 1.25rem 0 0${i};
+      max-width: 100%${i};
+      font-size: 1.05rem${i};
+      line-height: 1.5${i};
+      text-align: left${i};
+      color: var(--book-cover-title-color, #ffffff)${i};
+      opacity: 0.85${i};
+      white-space: pre-line${i};
+      overflow-wrap: anywhere${i};
+      word-break: keep-all${i};
+    }
+    ${quotePageCss(p, i)}
+  `;
+}
+
 function quotePageCss(p: string, i: string) {
   return `
     ${p}.${bookPageQuoteClass} {
@@ -540,8 +631,22 @@ export function syncBookPageMetrics(
   }
 
   if (mode === "scroll") {
-    if (splash && readerVh > 0) {
-      shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${readerVh}px`);
+    const pw = readerVw > 0 ? readerVw : w;
+    shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, `${pw}px`);
+    if (splash) {
+      const ph =
+        readerVh > 0
+          ? readerVh
+          : rootEl?.clientHeight && rootEl.clientHeight > 0
+            ? rootEl.clientHeight
+            : typeof window !== "undefined"
+              ? window.innerHeight
+              : 0;
+      if (ph > 0) {
+        shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${ph}px`);
+      } else {
+        shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+      }
     } else {
       shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
     }

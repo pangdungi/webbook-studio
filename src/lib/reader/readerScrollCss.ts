@@ -10,6 +10,7 @@ import {
   bookPageShellSplashClass,
 } from "@/lib/pages/bookPageCss";
 import { readerPaginateMeasureCss } from "@/lib/reader/paginateFlowPages";
+import { readerScrollFullBleedCss } from "@/lib/reader/readerScrollFullBleedCss";
 import { readerHtmlScrollInjectCss } from "@/lib/typography/bookStyles";
 
 export const READER_SLIDE_W_VAR = "--reader-slide-w";
@@ -30,6 +31,7 @@ export function readerScrollSurfaceCss(
       overflow-x: hidden${i};
       overflow-y: hidden${i};
       touch-action: manipulation${i};
+      background-color: #fafaf9${i};
     }
     .reader-scroll-surface--paginated {
       flex-direction: row${i};
@@ -88,18 +90,22 @@ export function readerScrollSurfaceCss(
       overflow-x: hidden${i};
       overflow-y: auto${i};
       touch-action: pan-y${i};
+      background-color: #ffffff${i};
     }
     .reader-scroll-surface--scroll {
       flex-direction: column${i};
       width: 100%${i};
-      max-width: 42rem${i};
-      margin: 0 auto${i};
+      max-width: none${i};
+      margin: 0${i};
       min-height: min-content${i};
       height: auto${i};
     }
     .reader-scroll-surface--scroll .reader-scroll-anchor {
       flex-shrink: 0${i};
-      scroll-margin-top: 0.5rem${i};
+      scroll-margin-top: 0${i};
+    }
+    .reader-scroll-surface--scroll .${bookPageShellFlowClass} {
+      margin-bottom: 0${i};
     }
     .reader-scroll-surface--scroll .${bookPageShellFlowClass} .${bookPageClass}.${bookPageContentClass} {
       height: auto${i};
@@ -127,7 +133,7 @@ export function readerScrollSurfaceCss(
       max-height: 100%${i};
       -webkit-overflow-scrolling: touch${i};
       overscroll-behavior: auto${i};
-      background-color: #fafaf9${i};
+      background-color: #ffffff${i};
       scrollbar-width: none${i};
       -ms-overflow-style: none${i};
     }
@@ -144,5 +150,6 @@ export function readerScrollSurfaceCss(
     }
     ${modeLayout}
     ${readerHtmlScrollInjectCss(writingMode, headingFonts, protectContent, viewMode)}
+    ${viewMode === "scroll" ? readerScrollFullBleedCss() : ""}
   `;
 }

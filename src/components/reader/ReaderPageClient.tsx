@@ -27,6 +27,7 @@ export function ReaderPageClient({
         writingMode={writingMode}
         headingFonts={headingFonts}
         protectContent
+        progressStorageKey={token}
       />
     </div>
   );

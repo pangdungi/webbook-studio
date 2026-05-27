@@ -610,11 +610,24 @@ export function readerHtmlScrollInjectCss(
     ${modeCss}
     ${vars}
     ${headingFontsExplicitCss(headingFonts, true)}
-    ${bookPageReaderCss(true)}
+    ${viewMode === "paginated" ? bookPageReaderCss(true) : ""}
     ${pageLayoutCss}
     ${bookProseTypographyCss(true)}
     ${proseImageCss(viewMode)}
     ${viewMode === "paginated" ? publishingReaderPageCss(true) : ""}
+    ${viewMode === "scroll" ? readerHtmlScrollChromeResetCss() : ""}
     ${protectContent ? readerContentProtectionCss().replace(/\bhtml,\s*body\b/g, ".reader-scroll-surface") : ""}
+  `;
+}
+
+/** 스크롤 리더 — EPUB용 body 패딩·회색 배경 제거 */
+function readerHtmlScrollChromeResetCss() {
+  return `
+    html:has(.reader-scroll-viewport--scroll),
+    body:has(.reader-scroll-viewport--scroll) {
+      margin: 0 !important;
+      padding: 0 !important;
+      background-color: #ffffff !important;
+    }
   `;
 }

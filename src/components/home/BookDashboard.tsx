@@ -180,8 +180,8 @@ export function BookDashboard() {
                 <p className="mb-4 text-xs leading-relaxed text-stone-500">
                   {isPublished ? (
                     <>
-                      독자에게 공개 중입니다. 편집 후 다시 「출판」하면 아래
-                      링크는 그대로, 내용만 바뀝니다.
+                      독자에게 공개 중입니다. 편집 후 다시 「출판」하면 링크는
+                      그대로, 내용·PDF만 갱신됩니다.
                     </>
                   ) : (
                     <>
@@ -224,6 +224,15 @@ export function BookDashboard() {
                   >
                     미리보기
                   </a>
+                  {isPublished && (
+                    <a
+                      href={`/api/books/${book.id}/pdf`}
+                      download
+                      className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs text-stone-700 hover:bg-stone-50"
+                    >
+                      PDF
+                    </a>
+                  )}
                   {isPublished && book.readerUrl && (
                     <a
                       href={book.readerUrl}

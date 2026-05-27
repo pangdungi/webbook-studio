@@ -38,6 +38,8 @@ type Props = {
   headingFonts?: BookHeadingFonts;
   embedded?: boolean;
   protectContent?: boolean;
+  /** 있으면 localStorage에 읽던 위치 저장·복원 */
+  progressStorageKey?: string;
 };
 
 export function WebBookReader({
@@ -47,6 +49,7 @@ export function WebBookReader({
   headingFonts = DEFAULT_BOOK_HEADING_FONTS,
   embedded = false,
   protectContent = false,
+  progressStorageKey,
 }: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
   const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
@@ -136,7 +139,7 @@ export function WebBookReader({
 
   return (
     <div
-      className="relative flex h-full min-h-0 flex-col bg-stone-50"
+      className="relative flex h-full min-h-0 flex-col bg-white"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
@@ -234,6 +237,7 @@ export function WebBookReader({
               headingFonts={headingFonts}
               fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
+              progressStorageKey={progressStorageKey}
               onTocReady={handleTocReady}
               onReadingAreaTap={handleReadingAreaTap}
             />

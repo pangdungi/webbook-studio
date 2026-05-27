@@ -25,6 +25,14 @@ import {
 import { attachReadingSurfaceTap } from "@/lib/reader/readingSurfaceTap";
 import { useReaderSwipe } from "@/components/reader/useReaderSwipe";
 import { paginateFlowPagesInSurface } from "@/lib/reader/paginateFlowPages";
+import { applyScrollFullBleedLayout } from "@/lib/reader/readerScrollFullBleedCss";
+import {
+  baseAnchorId,
+  loadReadingProgress,
+  resolveSlideIndex,
+  saveReadingProgress,
+  type ReaderReadingProgress,
+} from "@/lib/reader/readingProgress";
 
 export type HtmlScrollReaderHandle = {
   goTo: (anchorId: string) => void;
@@ -40,6 +48,8 @@ type Props = {
   headingFonts?: BookHeadingFonts;
   fontSizePercent?: string;
   protectContent?: boolean;
+  /** localStorage 키 접미사 — 독자 token 또는 preview:bookId */
+  progressStorageKey?: string;
   onTocReady?: (toc: ReaderTocEntry[]) => void;
   onReadingAreaTap?: () => void;
 };
@@ -60,6 +70,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       headingFonts = DEFAULT_BOOK_HEADING_FONTS,
       fontSizePercent = "100%",
       protectContent = false,
+      progressStorageKey,
       onTocReady,
       onReadingAreaTap,
     },
@@ -68,9 +79,87 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const viewportRef = useRef<HTMLDivElement>(null);
     const surfaceRef = useRef<HTMLDivElement>(null);
     const pageIndexRef = useRef(0);
+    const restoredOnceRef = useRef(false);
+    const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const sourceBodyHtmlRef = useRef(bodyHtml);
     sourceBodyHtmlRef.current = bodyHtml;
     const paginated = viewMode === "paginated";
+
+    const persistProgress = useCallback(() => {
+      if (!progressStorageKey) return;
+      const viewport = viewportRef.current;
+      const surface = surfaceRef.current;
+      if (!viewport || !surface) return;
+
+      let snapshot: Omit<ReaderReadingProgress, "updatedAt">;
+
+      if (paginated) {
+        const slides = getSlides(surface);
+        const slide = slides[pageIndexRef.current];
+        if (!slide?.id) return;
+        snapshot = {
+          viewMode,
+          anchorId: baseAnchorId(slide.id),
+          slideId: slide.id,
+          slideIndex: pageIndexRef.current,
+        };
+      } else {
+        const scrollTop = viewport.scrollTop;
+        const slides = getSlides(surface);
+        let anchorId = slides[0]?.id ?? "";
+        let anchorTop = 0;
+        for (const slide of slides) {
+          const top = slide.offsetTop;
+          if (top <= scrollTop + 32 && top >= anchorTop) {
+            anchorTop = top;
+            anchorId = slide.id;
+          }
+        }
+        if (!anchorId) return;
+        snapshot = {
+          viewMode,
+          anchorId: baseAnchorId(anchorId),
+          scrollTop: Math.max(0, Math.round(scrollTop - anchorTop)),
+        };
+      }
+
+      saveReadingProgress(progressStorageKey, snapshot);
+    }, [paginated, progressStorageKey, viewMode]);
+
+    const schedulePersistProgress = useCallback(() => {
+      if (!progressStorageKey) return;
+      if (saveProgressTimerRef.current) clearTimeout(saveProgressTimerRef.current);
+      saveProgressTimerRef.current = setTimeout(() => {
+        saveProgressTimerRef.current = null;
+        persistProgress();
+      }, 400);
+    }, [persistProgress, progressStorageKey]);
+
+    const restoreScrollProgress = useCallback(
+      (saved: ReaderReadingProgress) => {
+        const viewport = viewportRef.current;
+        const surface = surfaceRef.current;
+        if (!viewport || !surface) return;
+
+        const anchor =
+          surface.querySelector<HTMLElement>(`#${CSS.escape(saved.anchorId)}`) ??
+          document.getElementById(saved.anchorId);
+
+        if (anchor) {
+          viewport.scrollTop = anchor.offsetTop + (saved.scrollTop ?? 0);
+          return;
+        }
+
+        const el = document.getElementById(saved.anchorId);
+        if (!el) return;
+        const top =
+          el.getBoundingClientRect().top -
+          viewport.getBoundingClientRect().top +
+          viewport.scrollTop;
+        viewport.scrollTop = top + (saved.scrollTop ?? 0);
+      },
+      [],
+    );
 
     const applyPaginatedSlide = useCallback(
       (index: number, animate: boolean) => {
@@ -114,8 +203,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           ? "transform 0.22s ease-out"
           : "none";
         surface.style.transform = `translate3d(${-i * w}px, 0, 0)`;
+        schedulePersistProgress();
       },
-      [],
+      [schedulePersistProgress],
     );
 
     const runPaginatedLayout = useCallback(() => {
@@ -172,8 +262,17 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           });
         });
 
+      if (progressStorageKey && !restoredOnceRef.current) {
+        const saved = loadReadingProgress(progressStorageKey);
+        if (saved) {
+          const slides = getSlides(surface);
+          pageIndexRef.current = resolveSlideIndex(slides, saved);
+        }
+        restoredOnceRef.current = true;
+      }
+
       applyPaginatedSlide(pageIndexRef.current, false);
-    }, [applyPaginatedSlide, fontSizePercent]);
+    }, [applyPaginatedSlide, fontSizePercent, progressStorageKey]);
 
     const syncLayout = useCallback(() => {
       const viewport = viewportRef.current;
@@ -197,17 +296,38 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       if (h <= 0) return;
 
+      viewport.style.backgroundColor = "#ffffff";
       viewport.style.removeProperty(READER_SLIDE_W_VAR);
       surface.style.transform = "";
       surface.style.transition = "";
       surface.style.removeProperty(READER_SLIDE_W_VAR);
-      surface.style.width = "";
+      surface.style.width = "100%";
+      surface.style.maxWidth = "none";
+      surface.style.margin = "0";
       viewport.scrollLeft = 0;
+
+      applyScrollFullBleedLayout(surface, w);
 
       surface.querySelectorAll<HTMLElement>(`.${bookPageShellClass}`).forEach((shell) => {
         syncBookPageMetrics(shell, { mode: "scroll" });
       });
-    }, [paginated, applyPaginatedSlide, runPaginatedLayout]);
+
+      applyScrollFullBleedLayout(surface, w);
+
+      if (progressStorageKey && !restoredOnceRef.current) {
+        const saved = loadReadingProgress(progressStorageKey);
+        restoredOnceRef.current = true;
+        if (saved) {
+          requestAnimationFrame(() => restoreScrollProgress(saved));
+        }
+      }
+    }, [
+      paginated,
+      applyPaginatedSlide,
+      runPaginatedLayout,
+      progressStorageKey,
+      restoreScrollProgress,
+    ]);
 
     const scrollToAnchor = useCallback(
       (anchorId: string, behavior: ScrollBehavior = "smooth") => {
@@ -262,8 +382,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     );
 
     useEffect(() => {
-      pageIndexRef.current = 0;
-    }, [bodyHtml, viewMode]);
+      restoredOnceRef.current = false;
+      if (!progressStorageKey) pageIndexRef.current = 0;
+    }, [bodyHtml, viewMode, progressStorageKey]);
 
     const goPaginatedPrev = useCallback(
       () => applyPaginatedSlide(pageIndexRef.current - 1, true),
@@ -307,6 +428,37 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     useEffect(() => {
       syncLayout();
     }, [fontSizePercent, bodyHtml, viewMode, syncLayout]);
+
+    useEffect(() => {
+      if (!progressStorageKey) return;
+
+      const flush = () => persistProgress();
+      document.addEventListener("visibilitychange", flush);
+      window.addEventListener("pagehide", flush);
+
+      return () => {
+        document.removeEventListener("visibilitychange", flush);
+        window.removeEventListener("pagehide", flush);
+        flush();
+      };
+    }, [bodyHtml, viewMode, persistProgress, progressStorageKey]);
+
+    useEffect(() => {
+      if (!progressStorageKey || paginated) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+
+      const onScroll = () => schedulePersistProgress();
+      viewport.addEventListener("scroll", onScroll, { passive: true });
+
+      return () => {
+        viewport.removeEventListener("scroll", onScroll);
+        if (saveProgressTimerRef.current) {
+          clearTimeout(saveProgressTimerRef.current);
+          saveProgressTimerRef.current = null;
+        }
+      };
+    }, [bodyHtml, paginated, progressStorageKey, schedulePersistProgress]);
 
     const mode = writingMode === "vertical-rl" ? "vertical-rl" : "horizontal-tb";
     const css = readerScrollSurfaceCss(mode, headingFonts, viewMode, protectContent);

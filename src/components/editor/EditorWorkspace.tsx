@@ -498,8 +498,19 @@ export function EditorWorkspace({
 
     setBook(data.book);
     const title = (data.book?.title ?? book.title).trim() || "제목 없음";
+    const pdfLine = data.pdfReady
+      ? "PDF도 생성되었습니다. 상단 「PDF 받기」로 내려받을 수 있습니다."
+      : data.pdfError
+        ? `PDF 생성 실패(웹·EPUB 출판은 완료): ${data.pdfError}`
+        : "";
     setMessage(
-      `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.\n${data.readerUrl ?? ""}`,
+      [
+        `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.`,
+        data.readerUrl ?? "",
+        pdfLine,
+      ]
+        .filter(Boolean)
+        .join("\n"),
     );
   };
 
@@ -683,6 +694,24 @@ export function EditorWorkspace({
           }`}
         >
           독자 미리보기
+        </a>
+        <a
+          href={`/api/books/${bookId}/pdf`}
+          download
+          title={
+            chapters.length === 0
+              ? "챕터를 추가한 뒤 PDF를 받을 수 있습니다"
+              : book.status === "published"
+                ? "출판된 PDF 내려받기"
+                : "현재 저장본 기준 PDF 미리보기"
+          }
+          className={`rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-700 ${
+            chapters.length === 0
+              ? "pointer-events-none opacity-40"
+              : "hover:bg-stone-50"
+          }`}
+        >
+          PDF 받기
         </a>
         <button
           type="button"

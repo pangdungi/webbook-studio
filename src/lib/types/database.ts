@@ -23,6 +23,7 @@ export type Book = {
   heading_fonts: BookHeadingFonts;
   status: BookStatus;
   epub_storage_path: string | null;
+  pdf_storage_path: string | null;
   published_at: string | null;
   reader_pitch: string;
   reader_analysis: ReaderAnalysisReport | null;

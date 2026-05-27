@@ -25,6 +25,7 @@ export function BookPreviewClient({
         writingMode={writingMode}
         headingFonts={headingFonts}
         embedded
+        progressStorageKey={`preview:${bookId}`}
       />
     </div>
   );

@@ -25,6 +25,7 @@
     "jszip": "^3.10.1",
     "nanoid": "^5.1.11",
     "next": "16.2.6",
+    "playwright": "^1.60.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "react-reader": "^2.0.15"
