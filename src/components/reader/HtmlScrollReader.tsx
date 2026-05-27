@@ -127,6 +127,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           viewMode,
           anchorId: baseAnchorId(anchorId),
           scrollTop: Math.max(0, Math.round(scrollTop - anchorTop)),
+          absoluteScrollTop: Math.max(0, Math.round(scrollTop)),
         };
       }
 
@@ -147,6 +148,25 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         const viewport = viewportRef.current;
         const surface = surfaceRef.current;
         if (!viewport || !surface) return;
+
+        if (
+          typeof saved.absoluteScrollTop === "number" &&
+          saved.absoluteScrollTop > 0
+        ) {
+          viewport.scrollTop = saved.absoluteScrollTop;
+          lastKnownScrollTopRef.current = viewport.scrollTop;
+          return;
+        }
+
+        const isChapterOrCover =
+          saved.anchorId === "wbs-book-cover" ||
+          saved.anchorId.startsWith("wbs-ch-");
+        const isLegacyPageAnchor =
+          saved.anchorId.startsWith("wbs-") && !isChapterOrCover;
+
+        if (isLegacyPageAnchor) {
+          return;
+        }
 
         const anchor =
           surface.querySelector<HTMLElement>(`#${CSS.escape(saved.anchorId)}`) ??
@@ -333,12 +353,19 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       applyScrollFullBleedLayout(surface, w);
 
+      const pinnedTop = scrollLayoutReadyRef.current
+        ? viewport.scrollTop
+        : lastKnownScrollTopRef.current;
+
       const finishScrollLayout = () => {
         if (progressStorageKey && !restoredOnceRef.current) {
           const saved = loadReadingProgress(progressStorageKey);
           restoredOnceRef.current = true;
           if (saved) restoreScrollProgress(saved);
+        } else if (pinnedTop > 0) {
+          viewport.scrollTop = pinnedTop;
         }
+        lastKnownScrollTopRef.current = viewport.scrollTop;
         scrollLayoutReadyRef.current = true;
       };
 
@@ -444,7 +471,12 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       const viewport = viewportRef.current;
       if (!viewport) return;
 
-      const onTap = () => onReadingAreaTapRef.current?.();
+      const onTap = () => {
+        if (!paginated) {
+          lastKnownScrollTopRef.current = viewport.scrollTop;
+        }
+        onReadingAreaTapRef.current?.();
+      };
       const detachTap = attachReadingSurfaceTap(viewport, onTap);
 
       syncLayout();
@@ -454,13 +486,28 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           syncLayout();
           return;
         }
+        const surface = surfaceRef.current;
+        if (!surface) return;
+
+        const w = viewport.clientWidth;
+        const h = viewport.clientHeight;
+        if (w <= 0) return;
+
+        const doc = surface.ownerDocument;
+        if (doc) {
+          syncReaderViewportVars(doc.documentElement, w, Math.max(h, 1));
+          syncReaderViewportVars(surface, w, Math.max(h, 1));
+        }
+
         if (!scrollLayoutReadyRef.current) {
           syncLayout();
           return;
         }
-        forceScrollRelayoutRef.current = true;
-        lastScrollLayoutWidthRef.current = 0;
-        syncLayout();
+
+        const pinned = lastKnownScrollTopRef.current;
+        if (pinned > 0 && Math.abs(viewport.scrollTop - pinned) > 8) {
+          viewport.scrollTop = pinned;
+        }
       };
       window.addEventListener("resize", onWindowResize);
 
@@ -471,8 +518,16 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     }, [bodyHtml, paginated, protectContent, syncLayout]);
 
     useEffect(() => {
+      if (!paginated) {
+        const viewport = viewportRef.current;
+        if (scrollLayoutReadyRef.current && viewport) {
+          lastKnownScrollTopRef.current = viewport.scrollTop;
+        }
+        forceScrollRelayoutRef.current = true;
+        lastScrollLayoutWidthRef.current = 0;
+      }
       syncLayout();
-    }, [fontSizePercent, bodyHtml, viewMode, syncLayout]);
+    }, [fontSizePercent, bodyHtml, viewMode, paginated, syncLayout]);
 
     useEffect(() => {
       if (!progressStorageKey) return;

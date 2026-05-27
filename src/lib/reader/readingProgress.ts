@@ -9,6 +9,8 @@ export type ReaderReadingProgress = {
   slideIndex?: number;
   /** 스크롤 모드 — 앵커 상단 기준 추가 오프셋(px) */
   scrollTop?: number;
+  /** 스크롤 모드 — viewport 절대 scrollTop (앵커·리플로우와 무관) */
+  absoluteScrollTop?: number;
   updatedAt: number;
 };
 
@@ -41,6 +43,11 @@ export function loadReadingProgress(
       scrollTop:
         typeof data.scrollTop === "number" && Number.isFinite(data.scrollTop)
           ? Math.max(0, Math.round(data.scrollTop))
+          : undefined,
+      absoluteScrollTop:
+        typeof data.absoluteScrollTop === "number" &&
+        Number.isFinite(data.absoluteScrollTop)
+          ? Math.max(0, Math.round(data.absoluteScrollTop))
           : undefined,
       updatedAt: typeof data.updatedAt === "number" ? data.updatedAt : 0,
     };

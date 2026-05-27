@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { loadDraftBookScrollData } from "@/lib/reader/loadBookScrollData";
+import { READER_SCROLL_DOC_VERSION } from "@/lib/reader/scrollDocVersion";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
@@ -18,9 +19,17 @@ export async function GET(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }
 
-  return NextResponse.json({
-    title: result.book.title,
-    bodyHtml: result.bodyHtml,
-    toc: result.toc,
-  });
+  return NextResponse.json(
+    {
+      title: result.book.title,
+      bodyHtml: result.bodyHtml,
+      toc: result.toc,
+      scrollDocVersion: READER_SCROLL_DOC_VERSION,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    },
+  );
 }

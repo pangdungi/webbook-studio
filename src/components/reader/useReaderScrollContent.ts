@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { ReaderTocEntry } from "@/lib/reader/buildBookScrollDocument";
+import { READER_SCROLL_DOC_VERSION } from "@/lib/reader/scrollDocVersion";
 
 export function scrollUrlFromEpubUrl(epubUrl: string) {
   return epubUrl.replace(/\/epub\/?$/, "/scroll");
@@ -30,11 +31,12 @@ export function useReaderScrollContent(scrollUrl: string | null) {
     setError(null);
     setContent(null);
 
-    const absolute = scrollUrl.startsWith("http")
+    const base = scrollUrl.startsWith("http")
       ? scrollUrl
       : `${window.location.origin}${scrollUrl}`;
+    const absolute = `${base}${base.includes("?") ? "&" : "?"}v=${READER_SCROLL_DOC_VERSION}`;
 
-    fetch(absolute, { credentials: "include" })
+    fetch(absolute, { credentials: "include", cache: "no-store" })
       .then(async (res) => {
         const data = await res.json();
         if (!res.ok) {
