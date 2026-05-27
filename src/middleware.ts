@@ -9,6 +9,7 @@ import {
   parseReaderTokenFromPath,
   readerBookPath,
   readerCookieOptions,
+  resolveReaderToken,
 } from "@/lib/access/readerSession";
 import {
   isReaderOnlyHost,
@@ -93,9 +94,11 @@ export async function middleware(request: NextRequest) {
     attachReaderCookie(supabaseResponse, tokenFromPath, secure);
   }
 
-  const readerToken =
-    request.cookies.get(READER_SESSION_COOKIE)?.value ??
-    (tokenFromPath && !isAdmin ? tokenFromPath : undefined);
+  const readerToken = resolveReaderToken(
+    request.cookies.get(READER_SESSION_COOKIE)?.value,
+    tokenFromPath,
+    isAdmin,
+  );
 
   /* 관리자는 플랫폼 사용 — 독자 잠금 쿠키 제거 */
   if (isAdmin && readerToken) {
@@ -137,7 +140,7 @@ export async function middleware(request: NextRequest) {
       return redirectToReaderBook(request, readerToken);
     }
 
-    if (tokenFromPath) {
+    if (readerToken) {
       attachReaderCookie(supabaseResponse, readerToken, secure);
     }
 

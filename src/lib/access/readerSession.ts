@@ -23,10 +23,21 @@ export function clearReaderSessionCookie(response: NextResponse, secure: boolean
   });
 }
 
-/** /read/abc123 또는 /read/abc123/ */
+/** /read/abc123, /read/abc123/, /read/abc123/epub */
 export function parseReaderTokenFromPath(pathname: string): string | null {
-  const match = pathname.match(/^\/read\/([^/]+)\/?$/);
+  const match = pathname.match(/^\/read\/([^/]+)(?:\/epub)?\/?$/);
   return match?.[1] ?? null;
+}
+
+/** URL에 있는 토큰이 쿠키보다 우선 (새 출판 링크가 예전 쿠키에 가로채이지 않음) */
+export function resolveReaderToken(
+  cookieToken: string | undefined,
+  pathToken: string | null,
+  isAdmin: boolean,
+): string | undefined {
+  if (isAdmin) return undefined;
+  if (pathToken) return pathToken;
+  return cookieToken;
 }
 
 export function isReaderAllowedPath(pathname: string): boolean {
