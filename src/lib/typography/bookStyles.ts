@@ -15,6 +15,7 @@ import {
   bookPageEditorShellCss,
   bookPageReaderCss,
   bookPageReaderScrollCss,
+  bookPageHtmlScrollLayoutCss,
   bookPageReaderScrollLayoutCss,
   bookPageReaderPaginatedCss,
   bookPageReaderPaginatedInViewportCss,
@@ -604,7 +605,7 @@ export function readerHtmlScrollInjectCss(
   const pageLayoutCss =
     viewMode === "paginated"
       ? bookPageReaderPaginatedInViewportCss(true)
-      : bookPageReaderScrollLayoutCss(true);
+      : bookPageHtmlScrollLayoutCss(true);
 
   return `
     ${modeCss}

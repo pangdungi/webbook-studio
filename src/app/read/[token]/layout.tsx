@@ -5,9 +5,7 @@ export default function ReadTokenLayout({ children }: { children: React.ReactNod
       className="fixed inset-0 flex h-dvh max-h-dvh flex-col overflow-hidden"
       style={{
         paddingTop: "env(safe-area-inset-top)",
-        paddingRight: "env(safe-area-inset-right)",
         paddingBottom: "env(safe-area-inset-bottom)",
-        paddingLeft: "env(safe-area-inset-left)",
       }}
     >
       {children}

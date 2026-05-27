@@ -378,6 +378,81 @@ export function bookPageReaderScrollLayoutCss(important = false) {
   `;
 }
 
+/** HTML 스크롤 리더 — 뷰포트 안에서만, 페이지 가로 100% (672px·auto 마진 없음) */
+export function bookPageHtmlScrollLayoutCss(important = false) {
+  const scope = ".reader-scroll-viewport--scroll .reader-scroll-surface";
+  const i = important ? " !important" : "";
+
+  return `
+    ${scope} .${bookPageShellClass} {
+      width: 100%${i};
+      max-width: none${i};
+      min-width: 100%${i};
+      margin-left: 0${i};
+      margin-right: 0${i};
+      flex-shrink: 0${i};
+      box-sizing: border-box${i};
+      gap: 0${i};
+      align-items: stretch${i};
+    }
+    ${scope} .${bookPageShellFlowClass} {
+      margin-bottom: 1.25rem${i};
+    }
+    ${scope} .${bookPageShellFlowClass}:last-child {
+      margin-bottom: 0${i};
+    }
+    ${scope} .${bookPageShellClass} .${bookPageClass} {
+      width: 100%${i};
+      max-width: none${i};
+      min-width: 100%${i};
+      margin-left: 0${i};
+      margin-right: 0${i};
+    }
+    ${scope} .${bookPageShellClass}:not(.${bookPageShellSplashClass}) .${bookPageClass}.${bookPageContentClass} {
+      height: auto${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, 12rem)${i};
+      max-height: none${i};
+      overflow: visible${i};
+    }
+    ${scope} .${bookPageShellClass}:not(.${bookPageShellSplashClass}) .${bookPageClass}.${bookPageContentClass} .${bookPageBodyClass} {
+      height: auto${i};
+      max-height: none${i};
+      overflow: visible${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageClass} {
+      width: 100%${i};
+      max-width: none${i};
+      min-width: 100%${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageCoverClass},
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} {
+      align-items: flex-start${i};
+      justify-content: flex-start${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageCoverClass} h1.${bookChapterTitleClass} {
+      margin: 0${i};
+      text-align: left${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} h1.${bookBookTitleClass},
+    ${scope} .${bookPageShellSplashClass} .${bookPageBookCoverClass} .book-book-subtitle {
+      text-align: left${i};
+    }
+    ${scope} .${bookPageShellSplashClass} .${bookPageQuoteClass} .${bookPageBodyClass} {
+      display: flex${i};
+      flex-direction: column${i};
+      justify-content: center${i};
+      align-items: flex-end${i};
+      height: 100%${i};
+    }
+    ${scope} .${bookPageShellSplashClass}:only-child {
+      min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+    }
+  `;
+}
+
 /** EPUB·리더 — 스크롤: 세로 흰 종이 + 본문 장 간격 / 장·명언·표지 = 한 화면 높이 */
 export function bookPageReaderScrollCss(important = false) {
   return `${bookPageReaderScrollRootCss(important)}${bookPageReaderScrollLayoutCss(important)}`;
@@ -631,8 +706,7 @@ export function syncBookPageMetrics(
   }
 
   if (mode === "scroll") {
-    const pw = readerVw > 0 ? readerVw : w;
-    shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, `${pw}px`);
+    shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, "100%");
     if (splash) {
       const ph =
         readerVh > 0

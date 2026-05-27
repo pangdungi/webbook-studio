@@ -12,7 +12,7 @@ import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
 const SCROLL = ".reader-scroll-viewport--scroll";
 const SURFACE = `${SCROLL} .reader-scroll-surface`;
 
-/** 스크롤 본문 장 — pageBoxCss(672px) 대체, 가로 100% */
+/** 스크롤 본문 장 — 가로 100%, 좌우는 글 읽기용 최소 패딩만 */
 function readerScrollContentPageBoxCss() {
   const p = `${SURFACE} `;
   const i = " !important";
@@ -24,7 +24,7 @@ function readerScrollContentPageBoxCss() {
       max-width: none${i};
       min-width: 100%${i};
       margin: 0${i};
-      padding: 2.5rem 2rem${i};
+      padding: 2.5rem clamp(1rem, 4vw, 1.5rem)${i};
       background-color: #ffffff${i};
       font-family: ${bookBodyFontFamily}${i};
       font-size: 100%${i};
@@ -84,8 +84,7 @@ export function readerScrollFullBleedCss() {
       width: 100%${i};
       max-width: none${i};
       min-width: 100%${i};
-      margin-left: 0${i};
-      margin-right: 0${i};
+      margin: 0${i};
     }
   `;
 }
@@ -94,14 +93,11 @@ export function readerScrollFullBleedCss() {
 export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: number) {
   if (viewportWidth <= 0) return;
 
-  const fullWidth = `${viewportWidth}px`;
-
   const stretch = (el: HTMLElement) => {
     el.style.setProperty("width", "100%");
     el.style.setProperty("max-width", "none");
     el.style.setProperty("min-width", "100%");
-    el.style.setProperty("margin-left", "0");
-    el.style.setProperty("margin-right", "0");
+    el.style.setProperty("margin", "0");
   };
 
   stretch(root);
@@ -110,11 +106,9 @@ export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: num
   root.querySelectorAll<HTMLElement>(".reader-scroll-anchor").forEach(stretch);
   root.querySelectorAll<HTMLElement>(`.${bookPageShellClass}`).forEach((shell) => {
     stretch(shell);
-    shell.style.setProperty("--book-page-w", fullWidth);
+    shell.style.setProperty("--book-page-w", "100%");
   });
-  root.querySelectorAll<HTMLElement>(`.${bookPageClass}.${bookPageContentClass}`).forEach((page) => {
+  root.querySelectorAll<HTMLElement>(`.${bookPageClass}`).forEach((page) => {
     stretch(page);
-    page.style.setProperty("width", "100%");
-    page.style.setProperty("max-width", "none");
   });
 }
