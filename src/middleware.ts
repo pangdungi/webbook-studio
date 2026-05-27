@@ -5,7 +5,9 @@ import {
   READER_SESSION_COOKIE,
   isReaderAllowedPath,
   isReaderPathForToken,
+  parseReaderTokenFromPath,
   readerBookPath,
+  readerCookieOptions,
 } from "@/lib/access/readerSession";
 
 async function getProfileRole(
@@ -28,7 +30,15 @@ function redirectToReaderBook(request: NextRequest, token: string) {
   return NextResponse.redirect(url);
 }
 
+function attachReaderCookie(response: NextResponse, token: string, secure: boolean) {
+  response.cookies.set(READER_SESSION_COOKIE, token, readerCookieOptions(secure));
+}
+
 export async function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const secure = request.nextUrl.protocol === "https:";
+  const tokenFromPath = parseReaderTokenFromPath(pathname);
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(getSupabaseUrl(), getSupabaseAnonKey(), {
@@ -52,30 +62,38 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const pathname = request.nextUrl.pathname;
-  const readerToken = request.cookies.get(READER_SESSION_COOKIE)?.value;
-
   let isAdmin = false;
   if (user) {
     const role = await getProfileRole(supabase, user.id);
     isAdmin = role === "admin";
   }
 
+  /* 독자 링크 페이지 진입 시 쿠키 부여 (RSC보다 미들웨어가 확실함) */
+  if (tokenFromPath && !isAdmin) {
+    attachReaderCookie(supabaseResponse, tokenFromPath, secure);
+  }
+
+  const readerToken =
+    request.cookies.get(READER_SESSION_COOKIE)?.value ??
+    (tokenFromPath && !isAdmin ? tokenFromPath : undefined);
+
   /* 관리자는 플랫폼 사용 — 독자 잠금 쿠키 제거 */
   if (isAdmin && readerToken) {
-    if (
+    const onPlatform =
       pathname.startsWith("/admin") ||
       pathname === "/" ||
       pathname === "/login" ||
-      pathname.startsWith("/api/") && !pathname.startsWith("/api/read")
-    ) {
+      pathname === "/signup" ||
+      (pathname.startsWith("/api/") && !pathname.startsWith("/api/read"));
+
+    if (onPlatform) {
       supabaseResponse.cookies.delete(READER_SESSION_COOKIE);
     }
   }
 
-  /* 독자 링크로 들어온 세션: /read/해당토큰 과 EPUB·정적 리소스만 */
+  /* 독자: /read/본인토큰·epub·정적 파일만, 나머지는 책으로 되돌림 */
   if (readerToken && !isAdmin) {
-    if (pathname.startsWith("/api/read")) {
+    if (pathname.startsWith("/api/")) {
       return redirectToReaderBook(request, readerToken);
     }
 
@@ -88,6 +106,10 @@ export async function middleware(request: NextRequest) {
       !isReaderPathForToken(pathname, readerToken)
     ) {
       return redirectToReaderBook(request, readerToken);
+    }
+
+    if (tokenFromPath) {
+      attachReaderCookie(supabaseResponse, readerToken, secure);
     }
 
     return supabaseResponse;

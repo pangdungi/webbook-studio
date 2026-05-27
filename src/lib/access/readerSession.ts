@@ -2,6 +2,24 @@
 
 export const READER_SESSION_COOKIE = "wbs_reader_token";
 
+const READER_COOKIE_MAX_AGE = 60 * 60 * 24 * 90;
+
+export function readerCookieOptions(secure: boolean) {
+  return {
+    httpOnly: true,
+    secure,
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: READER_COOKIE_MAX_AGE,
+  };
+}
+
+/** /read/abc123 또는 /read/abc123/ */
+export function parseReaderTokenFromPath(pathname: string): string | null {
+  const match = pathname.match(/^\/read\/([^/]+)\/?$/);
+  return match?.[1] ?? null;
+}
+
 export function isReaderAllowedPath(pathname: string): boolean {
   if (pathname.startsWith("/read/")) return true;
   if (pathname.startsWith("/_next/")) return true;
