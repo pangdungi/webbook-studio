@@ -1,5 +1,6 @@
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { parseChapterContent } from "@/lib/pages/content";
+import { getPageTocLabel } from "@/lib/pages/pageTitle";
 import type { Book, Chapter } from "@/lib/types/database";
 import {
   buildBookCoverEpubHtml,
@@ -10,7 +11,31 @@ export type ReaderTocEntry = {
   label: string;
   /** 스크롤 앵커 id */
   href: string;
+  /** 0 = 표지·장, 1 = 장 안 페이지(부제목·본문·명언) */
+  depth?: 0 | 1;
 };
+
+export type ReaderTocGroup = {
+  head: ReaderTocEntry;
+  pages: ReaderTocEntry[];
+};
+
+/** 평면 목차 → 장(표지) 단위 그룹 */
+export function groupReaderToc(entries: ReaderTocEntry[]): ReaderTocGroup[] {
+  const groups: ReaderTocGroup[] = [];
+
+  for (const item of entries) {
+    if (item.depth === 1) {
+      const last = groups[groups.length - 1];
+      if (last) last.pages.push(item);
+      else groups.push({ head: item, pages: [] });
+      continue;
+    }
+    groups.push({ head: item, pages: [] });
+  }
+
+  return groups;
+}
 
 export type ReaderScrollPage = {
   id: string;
@@ -19,10 +44,6 @@ export type ReaderScrollPage = {
 
 function anchorId(prefix: string, pageId: string) {
   return `wbs-${prefix}-${pageId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
-}
-
-function chapterAnchorId(chapterId: string) {
-  return `wbs-ch-${chapterId}`.replace(/[^a-zA-Z0-9_-]/g, "-");
 }
 
 function wrapAnchor(id: string, html: string) {
@@ -49,7 +70,7 @@ export function buildBookScrollDocument(
   const coverHtml = buildBookCoverEpubHtml(book.title, book.subtitle, coverStyle);
   pages.push({ id: coverId, html: coverHtml });
   parts.push(wrapAnchor(coverId, coverHtml));
-  toc.push({ label: "표지", href: coverId });
+  toc.push({ label: "표지", href: coverId, depth: 0 });
 
   for (const chapter of chapters) {
     const parsed = parseChapterContent(
@@ -58,26 +79,30 @@ export function buildBookScrollDocument(
       chapter.content_html,
     );
 
-    const chapterId = chapterAnchorId(chapter.id);
-    const chapterParts: string[] = [];
-    let tocAdded = false;
+    let contentPageIndex = 0;
 
     for (const page of parsed.pages) {
       const pageHtml = buildPageEpubHtml(page, chapter.title);
-      chapterParts.push(pageHtml);
+      const pageAnchor = anchorId(chapter.id, page.id);
+      parts.push(wrapAnchor(pageAnchor, pageHtml));
       pages.push({
-        id: anchorId(chapter.id, page.id),
+        id: pageAnchor,
         html: pageHtml,
       });
 
-      if (!tocAdded && page.kind === "chapter-cover") {
-        toc.push({ label: chapter.title.trim() || "장", href: chapterId });
-        tocAdded = true;
+      if (page.kind === "chapter-cover") {
+        toc.push({
+          label: chapter.title.trim() || "장",
+          href: pageAnchor,
+          depth: 0,
+        });
+      } else if (page.kind === "content") {
+        toc.push({
+          label: getPageTocLabel(page, contentPageIndex++),
+          href: pageAnchor,
+          depth: 1,
+        });
       }
-    }
-
-    if (chapterParts.length > 0) {
-      parts.push(wrapAnchor(chapterId, chapterParts.join("\n")));
     }
   }
 

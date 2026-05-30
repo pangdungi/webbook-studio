@@ -18,6 +18,12 @@ import {
   bookQuoteSourceClass,
   bookQuoteTextClass,
 } from "@/lib/pages/bookPageCss";
+import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
+import {
+  buildPageLeadHtml,
+  contentDocWithoutLead,
+  extractFirstHeadingFromDoc,
+} from "@/lib/pages/pageTitle";
 import type { BookPage } from "@/lib/pages/types";
 import { wrapImagesInHtml } from "@/lib/typography/imageLayout";
 
@@ -65,9 +71,14 @@ export function buildPageEpubHtml(
     const body =
       page.content_html?.trim() ||
       `<div class="${bookQuotePageClass}"><blockquote class="${bookQuoteTextClass}"></blockquote><p class="${bookQuoteSourceClass}"></p></div>`;
-    return `<div class="${bookPageShellClass} ${bookPageShellSplashClass}"><article class="${bookPageClass} ${bookPageQuoteClass}"><div class="${bookPageBodyClass}">${body}</div></article></div>`;
+    return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${bookPageClass} ${bookPageQuoteClass}"><div class="${bookPageBodyClass}">${body}</div></article></div>`;
   }
 
-  const body = wrapImagesInHtml(page.content_html?.trim() || "<p class=\"book-body-p\"></p>");
-  return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${bookPageClass} ${bookPageContentClass}"><div class="${bookPageBodyClass}">${body}</div></article></div>`;
+  const lead = extractFirstHeadingFromDoc(page.content);
+  const bodyDoc = lead ? contentDocWithoutLead(page.content) : page.content;
+  const bodyInner = wrapImagesInHtml(
+    contentPageDocToHtml(bodyDoc).trim() || "<p class=\"book-body-p\"></p>",
+  );
+  const leadHtml = lead ? buildPageLeadHtml(lead) : "";
+  return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${bookPageClass} ${bookPageContentClass}"><div class="${bookPageBodyClass}">${leadHtml}${bodyInner}</div></article></div>`;
 }

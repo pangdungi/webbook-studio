@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { NavItem } from "epubjs";
 import type { WritingMode } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import { DEFAULT_BOOK_HEADING_FONTS } from "@/lib/typography/headingFonts";
@@ -13,7 +12,7 @@ import {
   HtmlScrollReader,
   type HtmlScrollReaderHandle,
 } from "@/components/reader/HtmlScrollReader";
-import type { ReaderTocEntry } from "@/lib/reader/buildBookScrollDocument";
+import { groupReaderToc } from "@/lib/reader/buildBookScrollDocument";
 import { ReaderChrome } from "@/components/reader/ReaderChrome";
 import { IconClose } from "@/components/reader/ReaderChromeIcons";
 import {
@@ -52,7 +51,6 @@ export function WebBookReader({
   const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
   const [chromeOpen, setChromeOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
-  const [toc, setToc] = useState<NavItem[]>([]);
   const readerNavRef = useRef<HtmlScrollReaderHandle | null>(null);
   const readerAreaRef = useRef<HTMLDivElement>(null);
   const scrollPinOnChromeRef = useRef<number | null>(null);
@@ -79,16 +77,8 @@ export function WebBookReader({
     saveReaderFontScale(scale);
   };
 
-  const handleTocReady = useCallback((items: NavItem[] | ReaderTocEntry[]) => {
-    setToc(
-      items.map((item) => ({
-        label: item.label,
-        href: item.href,
-      })) as NavItem[],
-    );
-  }, []);
-
   const goPrev = useCallback(() => readerNavRef.current?.prev(), []);
+  const tocGroups = content?.toc ? groupReaderToc(content.toc) : [];
   const goNext = useCallback(() => readerNavRef.current?.next(), []);
   const goTo = useCallback((href: string) => readerNavRef.current?.goTo(href), []);
 
@@ -163,7 +153,7 @@ export function WebBookReader({
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        {tocOpen && toc.length > 0 && (
+        {tocOpen && tocGroups.length > 0 && (
           <>
             <button
               type="button"
@@ -192,19 +182,37 @@ export function WebBookReader({
                   <IconClose className="h-5 w-5" />
                 </button>
               </div>
-              <ol className="reader-hide-scrollbar flex-1 space-y-0.5 overflow-y-auto p-2 text-sm">
-                {toc.map((item, i) => (
-                  <li key={`${item.href}-${i}`}>
+              <ol className="reader-hide-scrollbar flex-1 space-y-2 overflow-y-auto p-2">
+                {tocGroups.map((group) => (
+                  <li key={group.head.href}>
                     <button
                       type="button"
                       onClick={() => {
-                        goTo(item.href);
+                        goTo(group.head.href);
                         setTocOpen(false);
                       }}
-                      className="w-full rounded-lg px-3 py-2 text-left text-stone-700 hover:bg-stone-100"
+                      className="w-full rounded-lg px-3 py-2 text-left text-sm font-semibold text-stone-900 hover:bg-stone-100"
                     >
-                      {item.label?.trim() || `항목 ${i + 1}`}
+                      {group.head.label?.trim() || "항목"}
                     </button>
+                    {group.pages.length > 0 && (
+                      <ol className="mt-0.5 space-y-0.5 border-l-2 border-stone-200 pl-3 ml-2">
+                        {group.pages.map((page) => (
+                          <li key={page.href}>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                goTo(page.href);
+                                setTocOpen(false);
+                              }}
+                              className="w-full rounded-md px-2 py-1.5 text-left text-xs leading-snug text-stone-600 hover:bg-stone-50"
+                            >
+                              {page.label?.trim() || "페이지"}
+                            </button>
+                          </li>
+                        ))}
+                      </ol>
+                    )}
                   </li>
                 ))}
               </ol>
@@ -240,7 +248,6 @@ export function WebBookReader({
               fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
               progressStorageKey={progressStorageKey}
-              onTocReady={handleTocReady}
               onReadingAreaTap={handleReadingAreaTap}
             />
           )}

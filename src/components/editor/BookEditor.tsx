@@ -22,18 +22,49 @@ import {
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
 import { typographyGuide } from "@/lib/typography/bookStyles";
 import type { BookPage, PageKind } from "@/lib/pages/types";
+import {
+  extractFirstHeadingFromDoc,
+  getPageTocLabel,
+  setFirstHeadingInDoc,
+} from "@/lib/pages/pageTitle";
 import { quoteContentToHtml } from "@/lib/pages/quotePage";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
 import { SpellcheckPanel } from "./SpellcheckPanel";
 import { WritingReviewPanel } from "./WritingReviewPanel";
+import { WritingEvaluationPanel } from "./WritingEvaluationPanel";
+import type { WritingEvaluationReport } from "@/lib/writingEvaluation/types";
 import type { SpellCorrection } from "@/lib/types/database";
 import {
   applyCorrectedPlainTextToEditor,
   applyOneCorrectionToEditor,
+  applyParagraphAtIndex,
   getEditorPlainText,
   shiftCorrectionsAfterApply,
 } from "@/lib/spellcheck/applyToEditor";
+import { anchorCorrectionsToText } from "@/lib/spellcheck/localRules";
+import {
+  clearSpellcheckHighlights,
+  focusIssueInEditor,
+  syncSpellcheckHighlights,
+} from "@/lib/spellcheck/spellcheckMarks";
+import {
+  buildReviewParagraphs,
+  buildReviewParagraphsFromPlain,
+  deriveReviewHighlights,
+  deriveReviewHighlightsFromPlain,
+  type ReviewParagraphChunk,
+} from "@/lib/writingReview/compare";
+import { listEditorBlockLines } from "@/lib/writingReview/editorBlocks";
+import {
+  attachNotesToParagraphs,
+  type ParagraphNote,
+} from "@/lib/writingReview/paragraphNotes";
+import { runSpellcheckLocal } from "@/lib/spellcheck/runLocal";
 import type { Editor } from "@tiptap/react";
+import {
+  clearChapterDraft,
+  writeChapterDraft,
+} from "@/lib/editor/chapterDraftBackup";
 
 type Props = {
   chapterId: string;
@@ -52,6 +83,9 @@ type Props = {
     contentHtml: string,
   ) => void | Promise<void>;
   onSaveState?: (state: "pending" | "saving" | "saved" | "error") => void;
+  onSaveError?: (message: string) => void;
+  initialPageId?: string;
+  onActivePageChange?: (pageId: string) => void;
 };
 
 export type BookEditorHandle = {
@@ -59,7 +93,15 @@ export type BookEditorHandle = {
     chapterId: string;
     contentJson: Record<string, unknown>;
     contentHtml: string;
+    saved: boolean;
   }>;
+  /** 장·표지 전환 — 서버 대기 없이 부모 state만 반영, 저장은 백그라운드 */
+  commitChapterSnapshot: () => {
+    chapterId: string;
+    contentJson: Record<string, unknown>;
+    contentHtml: string;
+  };
+  selectPage: (pageId: string) => void;
 };
 
 function ToolbarButton({
@@ -102,11 +144,17 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   onContentChange,
   onSave,
   onSaveState,
+  onSaveError,
+  initialPageId,
+  onActivePageChange,
   },
   ref,
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const chapterIdRef = useRef(chapterId);
+  const bookIdRef = useRef(bookId);
+  bookIdRef.current = bookId;
+  chapterIdRef.current = chapterId;
   const onSaveRef = useRef(onSave);
   const onContentChangeRef = useRef(onContentChange);
   const onSaveStateRef = useRef(onSaveState);
@@ -120,12 +168,24 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<Map<string, HTMLElement>>(new Map());
 
-  const [pages, setPages] = useState<BookPage[]>(() =>
-    parseChapterContent(initialContent, chapterTitle, initialContentHtml).pages,
-  );
-  const [activePageId, setActivePageId] = useState(
-    () => pages.find((p) => p.kind === "content")?.id ?? pages[0]?.id ?? "",
-  );
+  const initialPages = parseChapterContent(
+    initialContent,
+    chapterTitle,
+    initialContentHtml,
+  ).pages;
+
+  const [pages, setPages] = useState<BookPage[]>(() => initialPages);
+  const [activePageId, setActivePageId] = useState(() => {
+    if (initialPageId && initialPages.some((p) => p.id === initialPageId)) {
+      return initialPageId;
+    }
+    return (
+      initialPages.find((p) => p.kind === "chapter-cover")?.id ??
+      initialPages.find((p) => p.kind === "content")?.id ??
+      initialPages[0]?.id ??
+      ""
+    );
+  });
   const [, setToolbarTick] = useState(0);
 
   const [spellOpen, setSpellOpen] = useState(false);
@@ -145,85 +205,281 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const [reviewRevised, setReviewRevised] = useState("");
   const [reviewSummary, setReviewSummary] = useState("");
   const [reviewScannedLength, setReviewScannedLength] = useState(0);
+  const [reviewParagraphs, setReviewParagraphs] = useState<
+    ReviewParagraphChunk[]
+  >([]);
+  const [reviewHighlights, setReviewHighlights] = useState<SpellCorrection[]>(
+    [],
+  );
+  const [reviewAppliedParagraphs, setReviewAppliedParagraphs] = useState<
+    Set<number>
+  >(new Set());
+  const [reviewAlignWarning, setReviewAlignWarning] = useState<string | null>(
+    null,
+  );
+  const [reviewParagraphNotes, setReviewParagraphNotes] = useState<
+    ParagraphNote[]
+  >([]);
+
+  const [evalOpen, setEvalOpen] = useState(false);
+  const [evalLoading, setEvalLoading] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
+  const [evalWarning, setEvalWarning] = useState<string | null>(null);
+  const [evalProvider, setEvalProvider] = useState<string | null>(null);
+  const [evalReport, setEvalReport] = useState<WritingEvaluationReport | null>(
+    null,
+  );
+  const [evalScannedLength, setEvalScannedLength] = useState(0);
+  const [reviewHasResult, setReviewHasResult] = useState(false);
+  const [evalHasResult, setEvalHasResult] = useState(false);
+
+  const reviewCacheRef = useRef(
+    new Map<
+      string,
+      {
+        original: string;
+        revised: string;
+        summary: string;
+        paragraphs: ReviewParagraphChunk[];
+        highlights: SpellCorrection[];
+        appliedParagraphs: number[];
+        paragraphNotes: ParagraphNote[];
+        provider: string | null;
+        alignWarning: string | null;
+        error: string | null;
+        scannedLength: number;
+      }
+    >(),
+  );
+  const evalCacheRef = useRef(
+    new Map<
+      string,
+      {
+        report: WritingEvaluationReport | null;
+        provider: string | null;
+        warning: string | null;
+        error: string | null;
+        scannedLength: number;
+        pageSubtitle: string;
+      }
+    >(),
+  );
+  const reviewPanelPageIdRef = useRef<string | null>(null);
+  const evalPanelPageIdRef = useRef<string | null>(null);
 
   const activeEditor = editorsRef.current.get(activePageId) ?? null;
+  const sidePanelOpen = reviewOpen || evalOpen;
 
-  chapterIdRef.current = chapterId;
+  const saveReviewCache = useCallback(
+    (pageId: string | null) => {
+      if (!pageId) return;
+      reviewCacheRef.current.set(pageId, {
+        original: reviewOriginal,
+        revised: reviewRevised,
+        summary: reviewSummary,
+        paragraphs: reviewParagraphs,
+        highlights: reviewHighlights,
+        appliedParagraphs: [...reviewAppliedParagraphs],
+        paragraphNotes: reviewParagraphNotes,
+        provider: reviewProvider,
+        alignWarning: reviewAlignWarning,
+        error: reviewError,
+        scannedLength: reviewScannedLength,
+      });
+    },
+    [
+      reviewOriginal,
+      reviewRevised,
+      reviewSummary,
+      reviewParagraphs,
+      reviewHighlights,
+      reviewAppliedParagraphs,
+      reviewParagraphNotes,
+      reviewProvider,
+      reviewAlignWarning,
+      reviewError,
+      reviewScannedLength,
+    ],
+  );
+
+  const loadReviewCache = useCallback(
+    (pageId: string, editor: Editor | null) => {
+      const cached = reviewCacheRef.current.get(pageId);
+      if (!cached) {
+        setReviewOriginal("");
+        setReviewRevised("");
+        setReviewSummary("");
+        setReviewParagraphs([]);
+        setReviewHighlights([]);
+        setReviewAppliedParagraphs(new Set());
+        setReviewAlignWarning(null);
+        setReviewParagraphNotes([]);
+        setReviewError(null);
+        setReviewProvider(null);
+        setReviewScannedLength(0);
+        setReviewHasResult(false);
+        clearSpellcheckHighlights(editor);
+        return;
+      }
+      setReviewOriginal(cached.original);
+      setReviewRevised(cached.revised);
+      setReviewSummary(cached.summary);
+      setReviewParagraphs(cached.paragraphs);
+      setReviewHighlights(cached.highlights);
+      setReviewAppliedParagraphs(new Set(cached.appliedParagraphs));
+      setReviewAlignWarning(cached.alignWarning);
+      setReviewParagraphNotes(cached.paragraphNotes);
+      setReviewError(cached.error);
+      setReviewProvider(cached.provider);
+      setReviewScannedLength(cached.scannedLength);
+      setReviewHasResult(true);
+      if (editor && cached.highlights.length > 0) {
+        syncSpellcheckHighlights(editor, cached.highlights, "review");
+      } else {
+        clearSpellcheckHighlights(editor);
+      }
+    },
+    [],
+  );
+
+  const saveEvalCache = useCallback(
+    (pageId: string | null, pageSubtitle: string) => {
+      if (!pageId) return;
+      evalCacheRef.current.set(pageId, {
+        report: evalReport,
+        provider: evalProvider,
+        warning: evalWarning,
+        error: evalError,
+        scannedLength: evalScannedLength,
+        pageSubtitle,
+      });
+    },
+    [evalReport, evalProvider, evalWarning, evalError, evalScannedLength],
+  );
+
+  const loadEvalCache = useCallback((pageId: string) => {
+    const cached = evalCacheRef.current.get(pageId);
+    if (!cached) {
+      setEvalReport(null);
+      setEvalError(null);
+      setEvalWarning(null);
+      setEvalProvider(null);
+      setEvalScannedLength(0);
+      setEvalHasResult(false);
+      return;
+    }
+    setEvalReport(cached.report);
+    setEvalError(cached.error);
+    setEvalWarning(cached.warning);
+    setEvalProvider(cached.provider);
+    setEvalScannedLength(cached.scannedLength);
+    setEvalHasResult(true);
+  }, []);
+
+  const closeWritingEvaluation = useCallback(
+    (pageSubtitle = "") => {
+      saveEvalCache(evalPanelPageIdRef.current, pageSubtitle);
+      setEvalOpen(false);
+    },
+    [saveEvalCache],
+  );
+
+  const closeWritingReview = useCallback(() => {
+    saveReviewCache(reviewPanelPageIdRef.current);
+    clearSpellcheckHighlights(activeEditor);
+    setReviewOpen(false);
+  }, [activeEditor, saveReviewCache]);
+
+  const refreshReviewDiff = useCallback(
+    (
+      original: string,
+      revised: string,
+      editor: Editor | null,
+      notes: ParagraphNote[] = [],
+    ) => {
+      if (editor) {
+        const blocks = listEditorBlockLines(editor);
+        const { paragraphs, meta } = buildReviewParagraphs(blocks, revised);
+        const withNotes = attachNotesToParagraphs(paragraphs, notes);
+        setReviewParagraphs(withNotes);
+        setReviewAlignWarning((prev) => meta.warning ?? prev);
+        setReviewHighlights(
+          anchorCorrectionsToText(
+            original,
+            deriveReviewHighlights(blocks, withNotes),
+          ),
+        );
+        return;
+      }
+      const { paragraphs, meta } = buildReviewParagraphsFromPlain(
+        original,
+        revised,
+      );
+      const withNotes = attachNotesToParagraphs(paragraphs, notes);
+      setReviewParagraphs(withNotes);
+      setReviewAlignWarning((prev) => meta.warning ?? prev);
+      setReviewHighlights(
+        anchorCorrectionsToText(
+          original,
+          deriveReviewHighlightsFromPlain(original, withNotes),
+        ),
+      );
+    },
+    [],
+  );
+
+  const closeSpellcheck = useCallback(() => {
+    clearSpellcheckHighlights(activeEditor);
+    setSpellOpen(false);
+    setCorrections([]);
+    setCorrectedText("");
+  }, [activeEditor]);
+
+  useEffect(() => {
+    const editor = activeEditor;
+    if (!editor) return;
+
+    editor.storage.spellcheckHighlight.onApplied = (correction, flash) => {
+      if (spellOpen) {
+        setCorrections((prev) => {
+          const next = shiftCorrectionsAfterApply(prev, correction);
+          syncSpellcheckHighlights(editor, next, "spellcheck");
+          editor.commands.flashSpellcheckRange(flash);
+          window.setTimeout(() => {
+            if (!editor.isDestroyed) {
+              editor.commands.clearSpellcheckFlash();
+            }
+          }, 900);
+          return next;
+        });
+      }
+    };
+
+    return () => {
+      editor.storage.spellcheckHighlight.onApplied = undefined;
+    };
+  }, [activeEditor, spellOpen]);
+
+  useEffect(() => {
+    if (!activeEditor || !spellOpen || spellLoading) return;
+    syncSpellcheckHighlights(activeEditor, corrections, "spellcheck");
+  }, [activeEditor, corrections, spellOpen, spellLoading]);
+
+  useEffect(() => {
+    if (!activeEditor || !reviewOpen || reviewLoading) return;
+    syncSpellcheckHighlights(activeEditor, reviewHighlights, "review");
+  }, [activeEditor, reviewHighlights, reviewOpen, reviewLoading]);
+
+  useEffect(() => {
+    if (!spellOpen && !reviewOpen) return;
+    return () => clearSpellcheckHighlights(activeEditor);
+  }, [activePageId, spellOpen, reviewOpen, activeEditor]);
+
   onSaveRef.current = onSave;
   onContentChangeRef.current = onContentChange;
   onSaveStateRef.current = onSaveState;
-
-  const flushSave = useCallback(async () => {
-    saveTimer.current = null;
-    const pending = pendingSaveRef.current;
-    if (!pending) return;
-
-    const payload = { ...pending };
-    pendingSaveRef.current = null;
-    onSaveStateRef.current?.("saving");
-
-    try {
-      await onSaveRef.current(
-        payload.chapterId,
-        payload.contentJson,
-        payload.contentHtml,
-      );
-      onSaveStateRef.current?.("saved");
-    } catch {
-      pendingSaveRef.current = payload;
-      onSaveStateRef.current?.("error");
-      throw new Error("chapter save failed");
-    }
-  }, []);
-
-  const flushPendingSave = useCallback(async () => {
-    if (saveTimer.current) {
-      clearTimeout(saveTimer.current);
-      saveTimer.current = null;
-    }
-
-    const snapshot = pagesRef.current;
-    const json = chapterContentToJson(snapshot) as unknown as Record<
-      string,
-      unknown
-    >;
-    const html = chapterPagesToStorageHtml(snapshot);
-    const payload = {
-      chapterId: chapterIdRef.current,
-      contentJson: json,
-      contentHtml: html,
-    };
-
-    pendingSaveRef.current = payload;
-    onContentChangeRef.current(chapterIdRef.current, json, html);
-    await flushSave();
-    return payload;
-  }, [flushSave]);
-
-  useImperativeHandle(ref, () => ({ flushPendingSave }), [flushPendingSave]);
-
-  const persist = useCallback(
-    (nextPages: BookPage[]) => {
-      const json = chapterContentToJson(nextPages) as unknown as Record<
-        string,
-        unknown
-      >;
-      const html = chapterPagesToStorageHtml(nextPages);
-      pendingSaveRef.current = {
-        chapterId: chapterIdRef.current,
-        contentJson: json,
-        contentHtml: html,
-      };
-      onContentChangeRef.current(chapterIdRef.current, json, html);
-      onSaveStateRef.current?.("pending");
-
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => {
-        void flushSave();
-      }, 800);
-    },
-    [flushSave],
-  );
+  const onSaveErrorRef = useRef(onSaveError);
+  onSaveErrorRef.current = onSaveError;
 
   const snapshotEditorPage = useCallback(
     (pageId: string) => {
@@ -242,16 +498,166 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [],
   );
 
+  const buildSavePayload = useCallback(() => {
+    const fromId = activePageIdRef.current;
+    const snap = snapshotEditorPage(fromId);
+    let nextPages = pagesRef.current;
+    if (snap) {
+      nextPages = nextPages.map((p) =>
+        p.id === fromId
+          ? { ...p, content: snap.json, content_html: snap.html }
+          : p,
+      );
+      pagesRef.current = nextPages;
+      setPages(nextPages);
+    }
+
+    const json = chapterContentToJson(nextPages) as unknown as Record<
+      string,
+      unknown
+    >;
+    const html = chapterPagesToStorageHtml(nextPages);
+    return {
+      chapterId: chapterIdRef.current,
+      contentJson: json,
+      contentHtml: html,
+    };
+  }, [snapshotEditorPage]);
+
+  const flushSave = useCallback(async (): Promise<boolean> => {
+    saveTimer.current = null;
+    const pending = pendingSaveRef.current;
+    if (!pending) return true;
+
+    const payload = { ...pending };
+    pendingSaveRef.current = null;
+    onSaveStateRef.current?.("saving");
+
+    try {
+      await onSaveRef.current(
+        payload.chapterId,
+        payload.contentJson,
+        payload.contentHtml,
+      );
+      onSaveStateRef.current?.("saved");
+      clearChapterDraft(bookIdRef.current, payload.chapterId);
+      return true;
+    } catch (err) {
+      pendingSaveRef.current = payload;
+      onSaveStateRef.current?.("error");
+      onSaveErrorRef.current?.(
+        err instanceof Error ? err.message : "저장에 실패했습니다.",
+      );
+      writeChapterDraft({
+        bookId: bookIdRef.current,
+        chapterId: payload.chapterId,
+        contentJson: payload.contentJson,
+        contentHtml: payload.contentHtml,
+        savedAt: Date.now(),
+      });
+      return false;
+    }
+  }, []);
+
+  const flushPendingSave = useCallback(async () => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    const payload = buildSavePayload();
+    pendingSaveRef.current = payload;
+    onContentChangeRef.current(
+      payload.chapterId,
+      payload.contentJson,
+      payload.contentHtml,
+    );
+    const saved = await flushSave();
+    return { ...payload, saved };
+  }, [buildSavePayload, flushSave]);
+
+  const onActivePageChangeRef = useRef(onActivePageChange);
+  onActivePageChangeRef.current = onActivePageChange;
+
+  const persist = useCallback(
+    (nextPages: BookPage[]) => {
+      const json = chapterContentToJson(nextPages) as unknown as Record<
+        string,
+        unknown
+      >;
+      const html = chapterPagesToStorageHtml(nextPages);
+      pendingSaveRef.current = {
+        chapterId: chapterIdRef.current,
+        contentJson: json,
+        contentHtml: html,
+      };
+      onContentChangeRef.current(chapterIdRef.current, json, html);
+      onSaveStateRef.current?.("pending");
+      writeChapterDraft({
+        bookId: bookIdRef.current,
+        chapterId: chapterIdRef.current,
+        contentJson: json,
+        contentHtml: html,
+        savedAt: Date.now(),
+      });
+
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = setTimeout(() => {
+        void flushSave();
+      }, 800);
+    },
+    [flushSave],
+  );
+
   const handlePageUpdate = useCallback(
     (pageId: string, json: Record<string, unknown>) => {
       const normalized = normalizeContentPageDoc(json);
       const html = contentPageDocToHtml(normalized);
+      const heading = extractFirstHeadingFromDoc(normalized);
       setPages((prev) => {
         const next = prev.map((p) =>
           p.id === pageId
-            ? { ...p, content: normalized, content_html: html }
+            ? {
+                ...p,
+                content: normalized,
+                content_html: html,
+                title: heading?.text ?? p.title ?? "",
+              }
             : p,
         );
+        queueMicrotask(() => persist(next));
+        return next;
+      });
+    },
+    [persist],
+  );
+
+  const handlePageTitleChange = useCallback(
+    (pageId: string, title: string) => {
+      setPages((prev) => {
+        const next = prev.map((p) => {
+          if (p.id !== pageId) return p;
+
+          if (p.kind === "content") {
+            const doc = setFirstHeadingInDoc(
+              normalizeContentPageDoc(p.content),
+              title,
+            );
+            const html = contentPageDocToHtml(doc);
+            const editor = editorsRef.current.get(pageId);
+            if (editor && activePageIdRef.current === pageId) {
+              editor.commands.setContent(doc, false);
+            }
+            return {
+              ...p,
+              title,
+              content: doc,
+              content_html: html,
+            };
+          }
+
+          return { ...p, title };
+        });
         queueMicrotask(() => persist(next));
         return next;
       });
@@ -308,7 +714,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         saveTimer.current = null;
       }
       if (pendingSaveRef.current) {
-        void flushSave();
+        void flushSave().catch(() => {});
       }
     };
   }, [flushSave]);
@@ -342,11 +748,58 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [persist, snapshotEditorPage],
   );
 
+  const selectPageRef = useRef(selectPage);
+  selectPageRef.current = selectPage;
+
+  useEffect(() => {
+    onActivePageChangeRef.current?.(activePageId);
+  }, [activePageId]);
+
+  const commitChapterSnapshot = useCallback(() => {
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+
+    const payload = buildSavePayload();
+    pendingSaveRef.current = payload;
+    onContentChangeRef.current(
+      payload.chapterId,
+      payload.contentJson,
+      payload.contentHtml,
+    );
+    onSaveStateRef.current?.("pending");
+    writeChapterDraft({
+      bookId: bookIdRef.current,
+      chapterId: payload.chapterId,
+      contentJson: payload.contentJson,
+      contentHtml: payload.contentHtml,
+      savedAt: Date.now(),
+    });
+    saveTimer.current = setTimeout(() => {
+      void flushSave();
+    }, 800);
+
+    return payload;
+  }, [buildSavePayload, flushSave]);
+
+  useImperativeHandle(
+    ref,
+    () => ({
+      flushPendingSave,
+      commitChapterSnapshot,
+      selectPage: (pageId: string) => {
+        selectPageRef.current(pageId);
+      },
+    }),
+    [commitChapterSnapshot, flushPendingSave],
+  );
+
   const addPage = (kind: Extract<PageKind, "content" | "quote">) => {
     const page = createPage(kind);
     setPages((prev) => {
       const next = [...prev, page];
-      persist(next);
+      queueMicrotask(() => persist(next));
       return next;
     });
     requestAnimationFrame(() => {
@@ -358,12 +811,9 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     const target = pages.find((p) => p.id === pageId);
     if (!target || target.kind === "chapter-cover") return;
 
-    const contentPages = pages.filter((p) => p.kind === "content");
-    if (target.kind === "content" && contentPages.length <= 1) return;
-
     setPages((prev) => {
       const next = prev.filter((p) => p.id !== pageId);
-      persist(next);
+      queueMicrotask(() => persist(next));
       return next;
     });
     if (activePageId === pageId) {
@@ -415,13 +865,17 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     const text = getEditorPlainText(editor);
     setReviewOriginal(text);
     setReviewScannedLength(text.length);
-    setReviewOpen(true);
-    setSpellOpen(false);
     setReviewLoading(true);
     setReviewError(null);
     setReviewProvider(null);
     setReviewRevised("");
     setReviewSummary("");
+    setReviewParagraphs([]);
+    setReviewHighlights([]);
+    setReviewAppliedParagraphs(new Set());
+    setReviewAlignWarning(null);
+    setReviewParagraphNotes([]);
+    clearSpellcheckHighlights(editor);
 
     try {
       const res = await fetch("/api/writing-review", {
@@ -434,32 +888,125 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       if (!res.ok) {
         setReviewError(data.error ?? "글검사에 실패했습니다.");
         setReviewRevised(text);
+        setReviewHasResult(true);
+        reviewPanelPageIdRef.current = activePageId;
+        saveReviewCache(activePageId);
         return;
       }
 
-      setReviewRevised(data.revisedText ?? text);
+      const revised = data.revisedText ?? text;
+      setReviewRevised(revised);
       setReviewSummary(data.summary ?? "");
       setReviewProvider(data.provider ?? null);
+      const notes = data.paragraphNotes ?? [];
+      setReviewParagraphNotes(notes);
+      if (data.warning) {
+        setReviewAlignWarning(data.warning);
+      }
+      refreshReviewDiff(text, revised, editor, notes);
+      setReviewHasResult(true);
+      reviewPanelPageIdRef.current = activePageId;
+      saveReviewCache(activePageId);
     } catch {
       setReviewError("네트워크 오류로 글검사에 실패했습니다.");
       setReviewRevised(text);
+      setReviewHasResult(true);
+      saveReviewCache(activePageId);
     } finally {
       setReviewLoading(false);
     }
-  }, [activeEditor]);
+  }, [activeEditor, activePageId, refreshReviewDiff, saveReviewCache]);
 
   const applyWritingReview = useCallback(() => {
     const editor = activeEditor;
     if (!editor || !reviewRevised) return;
-    const ok = applyCorrectedPlainTextToEditor(editor, reviewRevised);
-    if (!ok) {
-      alert("다듬은 글을 적용하지 못했습니다. 글검사를 다시 실행해 주세요.");
-      return;
+    for (const para of reviewParagraphs) {
+      if (!para.changed || reviewAppliedParagraphs.has(para.blockIndex)) {
+        continue;
+      }
+      applyParagraphAtIndex(editor, para.blockIndex, para.revised);
     }
-    setReviewOpen(false);
-    setReviewRevised("");
-    setReviewSummary("");
-  }, [activeEditor, reviewRevised]);
+    const plain = getEditorPlainText(editor);
+    refreshReviewDiff(plain, reviewRevised, editor);
+    setReviewAppliedParagraphs(
+      new Set(
+        reviewParagraphs.filter((p) => p.changed).map((p) => p.blockIndex),
+      ),
+    );
+    saveReviewCache(activePageId);
+  }, [
+    activeEditor,
+    activePageId,
+    reviewRevised,
+    reviewParagraphs,
+    reviewAppliedParagraphs,
+    reviewParagraphNotes,
+    refreshReviewDiff,
+    saveReviewCache,
+  ]);
+
+  const applyReviewParagraph = useCallback(
+    (chunk: ReviewParagraphChunk) => {
+      const editor = activeEditor;
+      if (!editor || !chunk.changed) return;
+      const ok = applyParagraphAtIndex(editor, chunk.blockIndex, chunk.revised);
+      if (!ok) {
+        alert("이 문단을 교체하지 못했습니다.");
+        return;
+      }
+      setReviewAppliedParagraphs((prev) => new Set(prev).add(chunk.blockIndex));
+      const plain = getEditorPlainText(editor);
+      refreshReviewDiff(plain, reviewRevised, editor, reviewParagraphNotes);
+      saveReviewCache(activePageId);
+    },
+    [
+      activeEditor,
+      activePageId,
+      reviewRevised,
+      reviewParagraphNotes,
+      refreshReviewDiff,
+      saveReviewCache,
+    ],
+  );
+
+  const focusReviewParagraph = useCallback(
+    (chunk: ReviewParagraphChunk) => {
+      const editor = activeEditor;
+      if (!editor) return;
+      const blocks = listEditorBlockLines(editor);
+      const block = blocks.find((b) => b.blockIndex === chunk.blockIndex);
+      const line = block?.text ?? chunk.original;
+      if (!line) return;
+      focusIssueInEditor(editor, {
+        from: line,
+        to: line,
+        reason: "글검사",
+        offset: block?.start ?? 0,
+      });
+    },
+    [activeEditor],
+  );
+
+  const applySpellcheckResult = useCallback(
+    (
+      editor: Editor,
+      text: string,
+      data: {
+        corrections?: SpellCorrection[];
+        correctedText?: string;
+        provider?: string | null;
+        warning?: string | null;
+      },
+    ) => {
+      const corrections = data.corrections ?? [];
+      setCorrections(corrections);
+      setCorrectedText(data.correctedText ?? text);
+      setSpellProvider(data.provider ?? "local");
+      setSpellError(data.warning ?? null);
+      syncSpellcheckHighlights(editor, corrections);
+    },
+    [],
+  );
 
   const runSpellcheck = useCallback(async () => {
     const editor = activeEditor;
@@ -467,66 +1014,92 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     const text = getEditorPlainText(editor);
     setOriginalText(text);
     setScannedLength(text.length);
+    if (reviewOpen) {
+      saveReviewCache(reviewPanelPageIdRef.current);
+      clearSpellcheckHighlights(editor);
+    }
+    if (evalOpen) {
+      const evalPageId = evalPanelPageIdRef.current ?? activePageId;
+      const evalPage = pages.find((p) => p.id === evalPageId);
+      let evalSubtitle = "";
+      if (evalPage?.kind === "content") {
+        const idx = pages
+          .filter((p) => p.kind === "content")
+          .findIndex((p) => p.id === evalPage.id);
+        evalSubtitle =
+          evalPage.title ??
+          extractFirstHeadingFromDoc(evalPage.content)?.text ??
+          getPageTocLabel(evalPage, idx >= 0 ? idx : 0);
+      } else if (evalPage) {
+        evalSubtitle = evalPage.title ?? "";
+      }
+      saveEvalCache(evalPageId, evalSubtitle);
+    }
     setReviewOpen(false);
+    setEvalOpen(false);
     setSpellOpen(true);
     setSpellLoading(true);
     setSpellError(null);
     setSpellProvider(null);
+    setCorrections([]);
+    syncSpellcheckHighlights(editor, []);
 
     try {
       const res = await fetch("/api/spellcheck", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text }),
+        body: JSON.stringify({ text, ai: true }),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        setSpellError(data.error ?? "맞춤법 검사에 실패했습니다.");
-        setCorrections([]);
-        setCorrectedText(text);
+        const local = runSpellcheckLocal(text);
+        applySpellcheckResult(editor, text, local);
+        setSpellError(
+          `${data.error ?? "맞춤법 검사에 실패했습니다."} · 보조 목록만 표시합니다.`,
+        );
         return;
       }
 
-      setCorrections(data.corrections ?? []);
-      setCorrectedText(data.correctedText ?? text);
-      setSpellProvider(data.provider ?? null);
-      if (data.warning) setSpellError(data.warning);
+      applySpellcheckResult(editor, text, data);
     } catch {
-      setSpellError("네트워크 오류로 맞춤법 검사에 실패했습니다.");
-      setCorrections([]);
-      setCorrectedText(text);
+      const local = runSpellcheckLocal(text);
+      applySpellcheckResult(editor, text, local);
+      setSpellError(
+        "네트워크 오류 · 보조 목록만 표시합니다.",
+      );
     } finally {
       setSpellLoading(false);
     }
-  }, [activeEditor]);
+  }, [
+    activeEditor,
+    activePageId,
+    pages,
+    reviewOpen,
+    evalOpen,
+    applySpellcheckResult,
+    saveReviewCache,
+    saveEvalCache,
+  ]);
 
   const applyAllCorrections = useCallback(() => {
     const editor = activeEditor;
     if (!editor || !correctedText) return;
-    const ok = applyCorrectedPlainTextToEditor(editor, correctedText);
+
+    let ok = applyCorrectedPlainTextToEditor(editor, correctedText);
+    if (!ok && corrections.length > 0) {
+      const sorted = [...corrections].sort((a, b) => b.offset - a.offset);
+      ok = sorted.every((c) => applyOneCorrectionToEditor(editor, c));
+    }
     if (!ok) {
       alert("교정본을 적용하지 못했습니다. 맞춤법 검사를 다시 실행해 주세요.");
       return;
     }
+    clearSpellcheckHighlights(activeEditor);
     setSpellOpen(false);
     setCorrections([]);
     setCorrectedText("");
-  }, [activeEditor, correctedText]);
-
-  const applyOneCorrection = useCallback(
-    (correction: SpellCorrection) => {
-      const editor = activeEditor;
-      if (!editor) return;
-      const ok = applyOneCorrectionToEditor(editor, correction);
-      if (!ok) {
-        alert("해당 부분을 찾지 못했습니다. 맞춤법 검사를 다시 실행해 주세요.");
-        return;
-      }
-      setCorrections((prev) => shiftCorrectionsAfterApply(prev, correction));
-    },
-    [activeEditor],
-  );
+  }, [activeEditor, correctedText, corrections]);
 
   const imageSelected = activeEditor?.isActive("image") ?? false;
   const imageAlign =
@@ -542,17 +1115,192 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
 
   const activePage = pages.find((p) => p.id === activePageId);
   const isContentPageActive = activePage?.kind === "content";
-  const canDeleteActivePage =
-    !!activePage &&
-    activePage.kind !== "chapter-cover" &&
-    (activePage.kind !== "content" ||
-      pages.filter((p) => p.kind === "content").length > 1);
+  const activeContentPageIndex = activePage
+    ? pages.filter((p) => p.kind === "content").findIndex((p) => p.id === activePage.id)
+    : -1;
+  const activePageTitleValue =
+    activePage?.kind === "content"
+      ? (activePage.title ??
+          extractFirstHeadingFromDoc(activePage.content)?.text ??
+          "")
+      : (activePage?.title ?? "");
+  const activePageTitlePlaceholder =
+    activePage && activePage.kind !== "chapter-cover"
+      ? getPageTocLabel(
+          activePage,
+          activeContentPageIndex >= 0 ? activeContentPageIndex : 0,
+        )
+      : "";
+
+  const pageSubtitleFor = useCallback(
+    (page: BookPage | undefined) => {
+      if (!page || page.kind === "chapter-cover") return "";
+      if (page.kind === "content") {
+        const idx = pages
+          .filter((p) => p.kind === "content")
+          .findIndex((p) => p.id === page.id);
+        return (
+          page.title ??
+          extractFirstHeadingFromDoc(page.content)?.text ??
+          getPageTocLabel(page, idx >= 0 ? idx : 0)
+        );
+      }
+      return page.title ?? "";
+    },
+    [pages],
+  );
+
+  const toggleWritingReviewPanel = useCallback(() => {
+    if (reviewOpen) {
+      closeWritingReview();
+      return;
+    }
+    closeWritingEvaluation(activePageTitleValue);
+    setSpellOpen(false);
+    setEvalOpen(false);
+    setReviewOpen(true);
+    reviewPanelPageIdRef.current = activePageId;
+    loadReviewCache(activePageId, activeEditor);
+  }, [
+    reviewOpen,
+    activePageId,
+    activePageTitleValue,
+    activeEditor,
+    closeWritingReview,
+    closeWritingEvaluation,
+    loadReviewCache,
+  ]);
+
+  const toggleWritingEvaluationPanel = useCallback(() => {
+    if (evalOpen) {
+      closeWritingEvaluation(activePageTitleValue);
+      return;
+    }
+    setSpellOpen(false);
+    closeWritingReview();
+    setEvalOpen(true);
+    evalPanelPageIdRef.current = activePageId;
+    loadEvalCache(activePageId);
+  }, [
+    evalOpen,
+    activePageId,
+    activePageTitleValue,
+    closeWritingEvaluation,
+    closeWritingReview,
+    loadEvalCache,
+  ]);
+
+  const prevActivePageIdForPanelsRef = useRef(activePageId);
+  useEffect(() => {
+    const prev = prevActivePageIdForPanelsRef.current;
+    if (prev === activePageId) return;
+    prevActivePageIdForPanelsRef.current = activePageId;
+
+    const prevPage = pages.find((p) => p.id === prev);
+    if (reviewOpen && reviewPanelPageIdRef.current === prev) {
+      saveReviewCache(prev);
+    }
+    if (evalOpen && evalPanelPageIdRef.current === prev) {
+      saveEvalCache(prev, pageSubtitleFor(prevPage));
+    }
+
+    const nextEditor = editorsRef.current.get(activePageId) ?? null;
+    if (reviewOpen) {
+      reviewPanelPageIdRef.current = activePageId;
+      loadReviewCache(activePageId, nextEditor);
+    }
+    if (evalOpen) {
+      evalPanelPageIdRef.current = activePageId;
+      loadEvalCache(activePageId);
+    }
+  }, [
+    activePageId,
+    pages,
+    reviewOpen,
+    evalOpen,
+    saveReviewCache,
+    saveEvalCache,
+    loadReviewCache,
+    loadEvalCache,
+    pageSubtitleFor,
+  ]);
+
+  const runWritingEvaluation = useCallback(async () => {
+    const editor = activeEditor;
+    if (!editor || activePage?.kind !== "content") return;
+    const text = getEditorPlainText(editor);
+    const pageSubtitle = activePageTitleValue;
+
+    setEvalScannedLength(text.length);
+    setEvalLoading(true);
+    setEvalError(null);
+    setEvalWarning(null);
+    setEvalProvider(null);
+    setEvalReport(null);
+
+    try {
+      const res = await fetch("/api/writing-evaluation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text, pageSubtitle }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        setEvalError(data.error ?? "글평가에 실패했습니다.");
+        setEvalHasResult(true);
+        evalPanelPageIdRef.current = activePageId;
+        saveEvalCache(activePageId, pageSubtitle);
+        return;
+      }
+
+      setEvalReport(data.report ?? null);
+      setEvalProvider(data.provider ?? null);
+      setEvalWarning(data.warning ?? null);
+      setEvalHasResult(true);
+      evalPanelPageIdRef.current = activePageId;
+      saveEvalCache(activePageId, pageSubtitle);
+    } catch {
+      setEvalError("네트워크 오류로 글평가에 실패했습니다.");
+      setEvalHasResult(true);
+      saveEvalCache(activePageId, pageSubtitle);
+    } finally {
+      setEvalLoading(false);
+    }
+  }, [
+    activeEditor,
+    activePage,
+    activePageId,
+    activePageTitleValue,
+    saveEvalCache,
+  ]);
+
+  const canDeletePage = (page: BookPage) => page.kind !== "chapter-cover";
+
+  const requestDeletePage = (pageId: string) => {
+    const target = pages.find((p) => p.id === pageId);
+    if (!target || !canDeletePage(target)) return;
+
+    const contentIdx = pages
+      .filter((p) => p.kind === "content")
+      .findIndex((p) => p.id === pageId);
+    const label = getPageTocLabel(target, contentIdx >= 0 ? contentIdx : 0);
+
+    const message =
+      target.kind === "quote"
+        ? `「${label}」 명언 페이지를 삭제할까요?\n\n되돌릴 수 없습니다.`
+        : `「${label}」 페이지를 삭제할까요?\n\n내용이 모두 지워지며 되돌릴 수 없습니다.`;
+
+    if (!window.confirm(message)) return;
+    deletePage(pageId);
+  };
 
   const pageTabLabel = (page: BookPage) => {
-    if (page.kind === "chapter-cover") return "표지";
     if (page.kind === "quote") return "명";
     return String(contentPageIndex(page.id) + 1);
   };
+
+  const tabPages = pages.filter((p) => p.kind !== "chapter-cover");
 
   const activePageIndex = pages.findIndex((p) => p.id === activePageId);
   const goAdjacentPage = (delta: -1 | 1) => {
@@ -573,7 +1321,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   }, [chapterId, activePageId]);
 
   return (
-    <div className="relative flex flex-1 flex-col">
+    <div className="relative flex min-h-0 flex-1 flex-col">
       <div className="flex flex-wrap items-center gap-1 border-b border-stone-200 bg-white px-4 py-2">
         <ToolbarButton
           active={activeEditor?.isActive("heading", { level: 2 })}
@@ -602,6 +1350,20 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           title={typographyGuide.p}
         >
           본문
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={!activeEditor?.can().undo()}
+          onClick={() => activeEditor?.chain().focus().undo().run()}
+          title="실행 취소 (⌘Z)"
+        >
+          실행취소
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={!activeEditor?.can().redo()}
+          onClick={() => activeEditor?.chain().focus().redo().run()}
+          title="다시 실행 (⌘⇧Z)"
+        >
+          다시실행
         </ToolbarButton>
         <ToolbarButton
           active={activeEditor?.isActive("bold")}
@@ -663,7 +1425,18 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           구분선
         </ToolbarButton>
         <div className="flex-1" />
-        <ToolbarButton disabled={!isContentPageActive} onClick={runWritingReview}>
+        <ToolbarButton
+          disabled={!isContentPageActive}
+          active={evalOpen}
+          onClick={toggleWritingEvaluationPanel}
+        >
+          글평가
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={!isContentPageActive}
+          active={reviewOpen}
+          onClick={toggleWritingReviewPanel}
+        >
           글검사
         </ToolbarButton>
         <ToolbarButton disabled={!isContentPageActive} onClick={runSpellcheck}>
@@ -671,72 +1444,102 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-b border-stone-100 bg-stone-50 px-4 py-2 text-xs text-stone-600">
-        <span className="font-medium text-stone-800">페이지</span>
-        <button
-          type="button"
-          disabled={activePageIndex <= 0}
-          onClick={() => goAdjacentPage(-1)}
-          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100 disabled:opacity-40"
-          title="이전 페이지"
-        >
-          ←
-        </button>
-        <button
-          type="button"
-          disabled={activePageIndex < 0 || activePageIndex >= pages.length - 1}
-          onClick={() => goAdjacentPage(1)}
-          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100 disabled:opacity-40"
-          title="다음 페이지"
-        >
-          →
-        </button>
-        {pages.map((page) => (
-          <button
-            key={page.id}
-            type="button"
-            onClick={() => selectPage(page.id)}
-            className={`rounded px-2 py-1 ${
-              activePageId === page.id
-                ? "bg-stone-900 text-white"
-                : "bg-white text-stone-600 ring-1 ring-stone-200 hover:bg-stone-100"
-            }`}
-          >
-            {pageTabLabel(page)}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => addPage("content")}
-          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
-          title="본문 페이지 추가"
-        >
-          + 본문
-        </button>
-        <button
-          type="button"
-          onClick={() => addPage("quote")}
-          className="rounded bg-white px-2 py-1 ring-1 ring-stone-200 hover:bg-stone-100"
-        >
-          + 명언
-        </button>
-        {canDeleteActivePage && (
+      <div className="border-b border-stone-100 bg-stone-50/80">
+        <div className="flex flex-wrap items-center gap-1.5 px-3 py-2">
           <button
             type="button"
-            onClick={() => deletePage(activePageId)}
-            className="ml-auto text-red-600 hover:underline"
+            disabled={activePageIndex <= 0}
+            onClick={() => goAdjacentPage(-1)}
+            className="rounded-md px-2 py-1 text-xs text-stone-500 hover:bg-white hover:text-stone-800 disabled:opacity-30"
+            title="이전 페이지"
           >
-            페이지 삭제
+            ←
           </button>
+          <button
+            type="button"
+            disabled={activePageIndex < 0 || activePageIndex >= pages.length - 1}
+            onClick={() => goAdjacentPage(1)}
+            className="rounded-md px-2 py-1 text-xs text-stone-500 hover:bg-white hover:text-stone-800 disabled:opacity-30"
+            title="다음 페이지"
+          >
+            →
+          </button>
+          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-0.5">
+            {tabPages.map((page) => {
+              const isActive = activePageId === page.id;
+              return (
+                <button
+                  key={page.id}
+                  type="button"
+                  onClick={() => selectPage(page.id)}
+                  className={`min-w-[2.5rem] px-3 py-2 text-lg tabular-nums leading-none ${
+                    page.kind === "content" ? "font-semibold" : "font-medium"
+                  } ${
+                    isActive
+                      ? "text-stone-900"
+                      : "text-stone-700 hover:text-stone-900"
+                  }`}
+                >
+                  {pageTabLabel(page)}
+                </button>
+              );
+            })}
+          </div>
+          <button
+            type="button"
+            onClick={() => addPage("content")}
+            className="rounded-md border border-stone-200/80 bg-white px-2 py-1 text-[11px] text-stone-600 hover:border-stone-300"
+            title="본문 페이지 추가"
+          >
+            +본문
+          </button>
+          <button
+            type="button"
+            onClick={() => addPage("quote")}
+            className="rounded-md border border-stone-200/80 bg-white px-2 py-1 text-[11px] text-stone-600 hover:border-stone-300"
+            title="명언 페이지 추가"
+          >
+            +명언
+          </button>
+        </div>
+        {activePage && activePage.kind !== "chapter-cover" && (
+          <div className="flex items-center gap-2 border-t border-stone-100/80 px-3 py-2">
+            <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-stone-500">
+              <span className="shrink-0 text-stone-400">부제목</span>
+              <input
+                type="text"
+                value={activePageTitleValue}
+                placeholder={activePageTitlePlaceholder}
+                onChange={(e) =>
+                  handlePageTitleChange(activePage.id, e.target.value)
+                }
+                className="min-w-0 flex-1 border-0 bg-transparent py-0.5 text-sm text-stone-900 outline-none placeholder:text-stone-400"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={() => requestDeletePage(activePage.id)}
+              className="shrink-0 rounded border border-red-200/80 bg-white px-2.5 py-1 text-xs font-medium text-red-600 hover:border-red-300 hover:bg-red-50"
+            >
+              페이지 삭제
+            </button>
+          </div>
         )}
       </div>
 
       <div
-        ref={scrollRef}
-        className="book-page-editor-scroll flex-1 overflow-y-auto"
+        className={
+          sidePanelOpen
+            ? "flex min-h-0 flex-1 flex-col md:flex-row"
+            : "flex min-h-0 flex-1 flex-col"
+        }
       >
-        <div ref={shellRef} className={bookPageShellClass}>
-          {activePage?.kind === "chapter-cover" ? (
+        <div
+          ref={scrollRef}
+          className="book-page-editor-scroll min-h-0 min-w-0 flex-1 overflow-y-auto"
+        >
+          <div ref={shellRef} className={bookPageShellClass}>
+            {activePage?.kind === "chapter-cover" ? (
             <article
               key={activePage.id}
               ref={(el) => {
@@ -771,25 +1574,46 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                 else pageRefs.current.delete(activePage.id);
               }}
             />
-          ) : null}
+            ) : null}
+          </div>
         </div>
+
+        {evalOpen && (
+          <WritingEvaluationPanel
+            report={evalReport}
+            loading={evalLoading}
+            error={evalError}
+            warning={evalWarning}
+            provider={evalProvider}
+            scannedLength={evalScannedLength}
+            pageSubtitle={activePageTitleValue}
+            hasResult={evalHasResult}
+            onRerun={runWritingEvaluation}
+            onClose={() => closeWritingEvaluation(activePageTitleValue)}
+          />
+        )}
+
+        {reviewOpen && (
+          <WritingReviewPanel
+            summary={reviewSummary}
+            paragraphs={reviewParagraphs}
+            appliedIndices={reviewAppliedParagraphs}
+            error={reviewError}
+            provider={reviewProvider}
+            loading={reviewLoading}
+            scannedLength={reviewScannedLength}
+            hasResult={reviewHasResult}
+            onRerun={runWritingReview}
+            onApplyParagraph={applyReviewParagraph}
+            onApplyAll={applyWritingReview}
+            onFocusParagraph={focusReviewParagraph}
+            alignWarning={reviewAlignWarning}
+            onClose={closeWritingReview}
+          />
+        )}
       </div>
 
-      {reviewOpen && (
-        <WritingReviewPanel
-          originalText={reviewOriginal}
-          revisedText={reviewRevised}
-          summary={reviewSummary}
-          error={reviewError}
-          provider={reviewProvider}
-          loading={reviewLoading}
-          scannedLength={reviewScannedLength}
-          onApplyAll={applyWritingReview}
-          onClose={() => setReviewOpen(false)}
-        />
-      )}
-
-      {spellOpen && !reviewOpen && (
+      {spellOpen && !reviewOpen && !evalOpen && (
         <SpellcheckPanel
           corrections={corrections}
           correctedText={correctedText}
@@ -797,8 +1621,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           error={spellError}
           provider={spellProvider}
           onApplyAll={applyAllCorrections}
-          onApplyOne={applyOneCorrection}
-          onClose={() => setSpellOpen(false)}
+          onClose={closeSpellcheck}
           loading={spellLoading}
           scannedLength={scannedLength}
         />

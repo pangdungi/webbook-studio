@@ -1,7 +1,10 @@
 import {
+  BOOK_PAGE_HEIGHT_VAR,
   bookPageBodyClass,
   bookPageClass,
   bookPageContentClass,
+  bookPageQuoteClass,
+  bookPageQuoteInnerCss,
   bookPageScrollSplashPageCss,
   bookPageShellClass,
   bookPageShellFlowClass,
@@ -11,6 +14,35 @@ import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
 
 const SCROLL = ".reader-scroll-viewport--scroll";
 const SURFACE = `${SCROLL} .reader-scroll-surface`;
+
+/** 스크롤 명언 페이지 — 본문 장과 동일한 한 장 크기(A4 비율), 가운데 정렬만 다름 */
+function readerScrollQuotePageBoxCss() {
+  const p = `${SURFACE} `;
+  const i = " !important";
+
+  return `
+    ${p}.${bookPageClass}.${bookPageQuoteClass} {
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: none${i};
+      min-width: 100%${i};
+      margin: 0${i};
+      padding: 2.5rem clamp(1rem, 4vw, 1.5rem)${i};
+      background-color: #ffffff${i};
+      font-family: ${bookBodyFontFamily}${i};
+      font-size: 100%${i};
+      line-height: 1.75${i};
+      color: #1c1917${i};
+      overflow: hidden${i};
+      position: relative${i};
+      flex-shrink: 0${i};
+      height: var(${BOOK_PAGE_HEIGHT_VAR}, 950px)${i};
+      min-height: var(${BOOK_PAGE_HEIGHT_VAR}, 950px)${i};
+      max-height: var(${BOOK_PAGE_HEIGHT_VAR}, 950px)${i};
+    }
+    ${bookPageQuoteInnerCss(SURFACE, true)}
+  `;
+}
 
 /** 스크롤 본문 장 — 가로 100%, 좌우는 글 읽기용 최소 패딩만 */
 function readerScrollContentPageBoxCss() {
@@ -54,6 +86,7 @@ export function readerScrollFullBleedCss() {
 
   return `
     ${readerScrollContentPageBoxCss()}
+    ${readerScrollQuotePageBoxCss()}
     ${bookPageScrollSplashPageCss(SURFACE, true)}
     ${SCROLL} {
       background-color: #ffffff${i};

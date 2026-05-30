@@ -203,16 +203,6 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           return;
         }
 
-        const isChapterOrCover =
-          saved.anchorId === "wbs-book-cover" ||
-          saved.anchorId.startsWith("wbs-ch-");
-        const isLegacyPageAnchor =
-          saved.anchorId.startsWith("wbs-") && !isChapterOrCover;
-
-        if (isLegacyPageAnchor) {
-          return;
-        }
-
         const anchor =
           surface.querySelector<HTMLElement>(`#${CSS.escape(saved.anchorId)}`) ??
           document.getElementById(saved.anchorId);

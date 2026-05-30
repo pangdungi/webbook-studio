@@ -64,6 +64,6 @@ export type SpellCorrection = {
 export type SpellcheckResult = {
   correctedText: string;
   corrections: SpellCorrection[];
-  provider?: "anthropic" | "openai" | "local";
+  provider?: "daum" | "naver" | "pnu" | "anthropic" | "openai" | "local";
   warning?: string;
 };

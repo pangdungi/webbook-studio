@@ -6,6 +6,8 @@ export type PageKind = "chapter-cover" | "content" | "quote";
 export type BookPage = {
   id: string;
   kind: PageKind;
+  /** 목차 서브 항목 — 비우면 첫 중·소제목 또는 기본 라벨 */
+  title?: string;
   /** TipTap ProseMirror doc */
   content: Record<string, unknown>;
   /** EPUB·미리보기용 HTML (페이지 캔버스 안) */

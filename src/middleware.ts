@@ -173,6 +173,10 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
+    /*
+     * 개발 HMR WebSocket(`/_next/webpack-hmr`)은 미들웨어 제외 —
+     * Supabase 세션 처리가 붙으면 핫 리로드 연결이 반복 실패함.
+     */
+    "/((?!_next/static|_next/image|_next/webpack-hmr|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

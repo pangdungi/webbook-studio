@@ -1,8 +1,19 @@
+import {
+  parseLlmJsonObject,
+  salvageWritingReviewFields,
+} from "@/lib/llm/parseJsonResponse";
+import {
+  normalizeParagraphNotes,
+  offsetParagraphNotes,
+  type ParagraphNote,
+  type ParagraphNoteInput,
+} from "@/lib/writingReview/paragraphNotes";
 import { WRITING_REVIEW_SYSTEM_PROMPT } from "@/lib/writingReview/prompt";
 
 export type WritingReviewResult = {
   revisedText: string;
   summary: string;
+  paragraphNotes: ParagraphNote[];
   provider?: "anthropic" | "openai";
   warning?: string;
 };
@@ -33,18 +44,32 @@ function splitText(text: string): string[] {
 }
 
 function parseReviewJson(raw: string, fallbackText: string): WritingReviewResult {
-  const jsonMatch = raw.match(/\{[\s\S]*\}/);
-  const parsed = JSON.parse(jsonMatch?.[0] ?? raw) as {
-    revisedText?: string;
-    summary?: string;
-  };
+  try {
+    const parsed = parseLlmJsonObject<{
+      revisedText?: string;
+      summary?: string;
+      paragraphNotes?: ParagraphNoteInput[];
+    }>(raw);
 
-  return {
-    revisedText: parsed.revisedText?.trim() || fallbackText,
-    summary:
-      parsed.summary?.trim() ||
-      "다듬은 문장을 확인한 뒤 전체 적용을 눌러 주세요.",
-  };
+    return {
+      revisedText: parsed.revisedText?.trim() || fallbackText,
+      summary:
+        parsed.summary?.trim() ||
+        "다듬은 문장을 확인한 뒤 문단별로 적용해 주세요.",
+      paragraphNotes: normalizeParagraphNotes(
+        parsed.paragraphNotes ?? [],
+      ),
+    };
+  } catch {
+    const fields = salvageWritingReviewFields(raw, fallbackText);
+    return {
+      revisedText: fields.revisedText,
+      summary: fields.summary,
+      paragraphNotes: normalizeParagraphNotes(fields.paragraphNotes),
+      warning:
+        "AI 응답 JSON이 깨져 일부만 복구했습니다. 결과를 확인한 뒤 적용해 주세요.",
+    };
+  }
 }
 
 async function reviewWithAnthropic(text: string): Promise<WritingReviewResult> {
@@ -62,7 +87,12 @@ async function reviewWithAnthropic(text: string): Promise<WritingReviewResult> {
       model: ANTHROPIC_MODEL,
       max_tokens: 8192,
       system: WRITING_REVIEW_SYSTEM_PROMPT,
-      messages: [{ role: "user", content: text }],
+      messages: [
+        {
+          role: "user",
+          content: `이 본문은 ${text.split("\n").length}줄(\\n으로 구분)입니다. revisedText도 같은 ${text.split("\n").length}줄을 유지하세요. 고친 줄마다 paragraphNotes에 problem·suggestion·criteria를 넣으세요.\n\n${text}`,
+        },
+      ],
     }),
   });
 
@@ -93,7 +123,10 @@ async function reviewWithOpenAI(text: string): Promise<WritingReviewResult> {
       response_format: { type: "json_object" },
       messages: [
         { role: "system", content: WRITING_REVIEW_SYSTEM_PROMPT },
-        { role: "user", content: text },
+        {
+          role: "user",
+          content: `이 본문은 ${text.split("\n").length}줄(\\n으로 구분)입니다. revisedText도 같은 ${text.split("\n").length}줄을 유지하세요. 고친 줄마다 paragraphNotes에 problem·suggestion·criteria를 넣으세요.\n\n${text}`,
+        },
       ],
       temperature: 0.2,
     }),
@@ -136,8 +169,11 @@ async function reviewLongText(text: string): Promise<WritingReviewResult | null>
   const chunks = splitText(text);
   const revisedParts: string[] = [];
   const summaries: string[] = [];
+  const allNotes: ParagraphNote[] = [];
   let provider: WritingReviewResult["provider"];
+  let warning: string | undefined;
   let searchFrom = 0;
+  let lineOffset = 0;
 
   for (const chunk of chunks) {
     const start = text.indexOf(chunk, searchFrom);
@@ -149,6 +185,11 @@ async function reviewLongText(text: string): Promise<WritingReviewResult | null>
     revisedParts.push(result.revisedText);
     if (result.summary) summaries.push(result.summary);
     provider = result.provider ?? provider;
+    if (result.warning) warning = result.warning;
+    allNotes.push(
+      ...offsetParagraphNotes(result.paragraphNotes, lineOffset),
+    );
+    lineOffset += chunk.split("\n").length;
     searchFrom = start + chunk.length;
     if (text[searchFrom] === "\n") searchFrom += 1;
   }
@@ -158,7 +199,9 @@ async function reviewLongText(text: string): Promise<WritingReviewResult | null>
   return {
     revisedText: revisedParts.join("\n"),
     summary: summaries.join(" "),
+    paragraphNotes: allNotes,
     provider,
+    warning,
   };
 }
 
@@ -167,6 +210,7 @@ export async function runWritingReview(text: string): Promise<WritingReviewResul
     return {
       revisedText: text,
       summary: "검사할 본문이 없습니다.",
+      paragraphNotes: [],
     };
   }
 
@@ -177,6 +221,11 @@ export async function runWritingReview(text: string): Promise<WritingReviewResul
     const message =
       error instanceof Error ? error.message : "글검사 API 오류";
     console.error("Writing review LLM failed:", error);
+    if (/JSON|parse|position/i.test(message)) {
+      throw new Error(
+        `글검사 응답을 해석하지 못했습니다 (${message}). 다시 시도해 주세요.`,
+      );
+    }
     throw new Error(
       `Claude/OpenAI 연결 실패 (${message}). .env.local의 ANTHROPIC_API_KEY와 SPELLCHECK_PROVIDER=anthropic을 확인해 주세요.`,
     );

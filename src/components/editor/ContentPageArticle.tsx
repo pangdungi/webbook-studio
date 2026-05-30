@@ -17,7 +17,6 @@ type Props = {
   pageRef: RefCallback<HTMLElement>;
 };
 
-/** 탭으로 선택된 본문 페이지만 표시 — 한 화면에 한 페이지 */
 export const ContentPageArticle = memo(function ContentPageArticle({
   page,
   onUpdate,

@@ -82,6 +82,7 @@ export function parseChapterContent(
           : p.kind === "quote"
             ? "quote"
             : "content",
+      title: typeof p.title === "string" ? p.title : undefined,
       content: p.content ?? structuredClone(EMPTY_TIPTAP_DOC),
       content_html: p.content_html ?? "",
     })) as BookPage[];

@@ -13,27 +13,36 @@ Revise the user's text so it reads clearly while keeping the author's core messa
 3. End each sentence with exactly one of: period (.), exclamation (!), or question (?). One complete thought per sentence.
 4. Semicolons, colons, and parentheses are forbidden — delete them or rewrite as separate short sentences.
 5. Prefer active voice over passive voice.
-6. Replace stative predicates with action predicates (e.g. avoid "~에 빠져있었다"; use "~에 푹 빠졌다").
-7. Merge chained compound sentences (avoid "~했는데, ~했다" or "~갔다가 만났다" patterns); prefer parallel short clauses side by side when listing.
+6. Replace stative predicates with action predicates.
+7. Merge chained compound sentences; prefer parallel short clauses when listing.
 8. Prefer short, simple sentences.
-9. When citing a source or authority, add a clear attribution phrase (e.g. "김영하 작가가 통찰한 대로,") where the original implies a quote or reference but lacks attribution — do not invent sources not implied by the text.
-10. Avoid conceptual, vague, or lofty abstractions ("관념적·모호한 표현"). Do not pad with impressive-sounding ideas — that makes prose long, explanatory, or preachy. Good writing is not "writing thoughts beautifully."
-11. Show, do not tell ("설명하지 말고 보여줘라"). Replace summary judgments and emotional labels with concrete scenes, actions, dialogue, and sensory detail the reader can see.
-    - BAD (telling): "국토 종단 자전거 여행 이후 나는 예전의 내가 아니었다."
-    - GOOD (showing): Show what changed — e.g. waking earlier, brighter expression, slower stride — so the reader infers the change without being told.
-    - BAD (telling): Only naming feelings ("무서웠다", "안타까워하셨다") without visible behavior.
-    - GOOD (showing): Like "아버지께서는 매일 폭음을 하시고, 방세를 못 준 어머니께서는 … 동생은 … 아침마다 울면서 … 나는 하루가 또 돌아온다는 것이 무서웠다" — specific household scenes that carry the emotion.
-12. Cut explanatory or lecturing tone ("~해야 한다", "~인 것이다", "~라고 말할 수 있다" when it only comments on the text). Let scenes and facts carry the meaning.
+9. Add clear attribution only where the original implies a quote — do not invent sources.
+10. Avoid vague abstractions and preachy tone.
+11. Show, do not tell — concrete scenes and actions.
+12. Cut explanatory or lecturing tone.
 
 ## Output
 Return JSON ONLY (no markdown fence):
 {
   "revisedText": "full revised Korean text with \\n between paragraphs",
-  "summary": "2–4 sentences in Korean: what you changed and confirmation that core message was preserved"
+  "summary": "2–4 sentences in Korean: overall what you changed",
+  "paragraphNotes": [
+    {
+      "index": 0,
+      "criteria": ["문체", "문장"],
+      "problem": "이 줄(문단)에서 무엇이 기준에 안 맞는지 — 한국어 1~2문장",
+      "suggestion": "어떻게 고쳤는지·이렇게 쓰면 좋다 — 한국어 1~2문장"
+    }
+  ]
 }
 
-Rules for revisedText:
-- Plain Korean text only (no HTML, no markdown headings).
-- Use \\n for paragraph breaks matching the input structure.
-- Do not add new sections or content the author did not imply.
-- Fix spelling/spacing only when needed for clarity; focus on structure and style per rules above.`;
+## paragraphNotes rules
+- index = 0-based line number in the INPUT (first line is 0). One entry per line you changed in revisedText.
+- Omit lines you did not change (no entry for unchanged lines).
+- criteria: subset of 메시지|중복|문장|문체|표현|문법|띄어쓰기|오타|인용
+- problem: concrete, specific (not "다듬음" only).
+- suggestion: what you did or what the author should do — ties to revisedText for that line.
+
+## revisedText rules
+- Plain Korean only. CRITICAL: EXACT same number of lines as input, \\n between lines. Do NOT merge, split, or reorder lines.
+- No meta notes like "(삭제)" in revisedText.`;

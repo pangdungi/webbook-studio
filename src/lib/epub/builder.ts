@@ -2,6 +2,7 @@ import Epub from "epub-gen-memory";
 import type { Book, Chapter, WritingMode } from "@/lib/types/database";
 import { markTocNonLinear } from "@/lib/epub/postProcess";
 import { parseChapterContent } from "@/lib/pages/content";
+import { getPageTocLabel } from "@/lib/pages/pageTitle";
 import {
   buildBookCoverEpubHtml,
   buildPageEpubHtml,
@@ -18,14 +19,6 @@ function writingModeCss(mode: WritingMode) {
     `;
   }
   return `body { writing-mode: horizontal-tb; }`;
-}
-
-function contentPageNumber(
-  pages: ReturnType<typeof parseChapterContent>["pages"],
-  pageId: string,
-) {
-  const idx = pages.filter((p) => p.kind === "content").findIndex((p) => p.id === pageId);
-  return idx >= 0 ? idx + 1 : 1;
 }
 
 export async function buildEpubBuffer(
@@ -61,13 +54,15 @@ export async function buildEpubBuffer(
         ch.content_html,
       );
 
+      let contentPageIndex = 0;
+
       return parsed.pages.map((page) => ({
         title:
           page.kind === "chapter-cover"
-            ? ch.title
-            : page.kind === "quote"
-              ? `${ch.title} 명언`
-              : `${ch.title} ${contentPageNumber(parsed.pages, page.id)}`,
+            ? ch.title.trim() || "장"
+            : page.kind === "content"
+              ? getPageTocLabel(page, contentPageIndex++)
+              : getPageTocLabel(page, 0),
         content: buildPageEpubHtml(page, ch.title),
         excludeFromToc: page.kind !== "chapter-cover",
       }));

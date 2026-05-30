@@ -391,6 +391,29 @@ export function bookEditorCss() {
       outline: none;
       min-height: 12rem;
     }
+    .book-page-prose .ProseMirror .spellcheck-mark {
+      background: rgba(251, 191, 36, 0.4);
+      border-bottom: 2px solid #d97706;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .book-page-prose .ProseMirror .spellcheck-mark:hover {
+      background: rgba(251, 191, 36, 0.65);
+    }
+    .book-page-prose .ProseMirror .spellcheck-applied {
+      background: rgba(34, 197, 94, 0.35);
+      border-radius: 2px;
+      transition: background 0.4s ease;
+    }
+    .book-page-prose .ProseMirror .writing-review-mark {
+      background: rgba(56, 189, 248, 0.35);
+      border-bottom: 2px solid #0284c7;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+    .book-page-prose .ProseMirror .writing-review-mark:hover {
+      background: rgba(56, 189, 248, 0.55);
+    }
     ${bookProseTypographyCss()}
     .book-page-prose p.book-body-p:empty {
       min-height: 1.75em;
@@ -495,11 +518,38 @@ function headingFontsExplicitCss(
     .${bookPageBookCoverClass} h1.${bookBookTitleClass} {
       font-family: ${headingFontFamily(fonts.chapterTitle)}${i};
     }
-    .${bookPageClass}.${bookPageContentClass} h2 {
+    .${bookPageClass}.${bookPageContentClass} h2,
+    .${bookPageClass}.${bookPageContentClass} h2.book-page-subtitle {
       font-family: ${headingFontFamily(fonts.heading2)}${i};
     }
-    .${bookPageClass}.${bookPageContentClass} h3 {
+    .${bookPageClass}.${bookPageContentClass} h3,
+    .${bookPageClass}.${bookPageContentClass} h3.book-page-subtitle {
       font-family: ${headingFontFamily(fonts.heading3)}${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} .book-page-subtitle {
+      display: block${i};
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: 88%${i};
+      margin: 2.25em auto 1.35em${i};
+      padding: 0${i};
+      text-align: center${i};
+      text-indent: 0${i};
+      word-break: keep-all${i};
+      overflow-wrap: anywhere${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} h2.book-page-subtitle {
+      font-size: 1.15em${i};
+      font-weight: 600${i};
+      line-height: 1.5${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} h3.book-page-subtitle {
+      font-size: 1.05em${i};
+      font-weight: 600${i};
+      line-height: 1.55${i};
+    }
+    .${bookPageClass}.${bookPageContentClass} .book-page-subtitle + p.book-body-p {
+      text-indent: 1em${i};
     }
   `;
 }

@@ -5,6 +5,7 @@ import {
   bookPageBodyClass,
   bookPageClass,
   bookPageContentClass,
+  bookPageQuoteClass,
   bookPageShellClass,
   bookPageShellFlowClass,
   bookPageShellSplashClass,
@@ -72,10 +73,16 @@ export function readerScrollSurfaceCss(
       margin-right: 0${i};
     }
     .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageContentClass},
-    .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageContentClass} .${bookPageBodyClass} {
+    .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageContentClass} .${bookPageBodyClass},
+    .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageQuoteClass},
+    .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageQuoteClass} .${bookPageBodyClass} {
       height: 100%${i};
       max-height: 100%${i};
       overflow: hidden${i};
+    }
+    .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageClass}.${bookPageQuoteClass} .${bookPageBodyClass} {
+      overflow-y: auto${i};
+      overflow-x: hidden${i};
     }
     .reader-scroll-viewport--paginated .${bookPageShellFlowClass} .${bookPageBodyClass} img {
       max-width: 100%${i};

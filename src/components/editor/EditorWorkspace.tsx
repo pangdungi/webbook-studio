@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BookCoverEditor } from "@/components/editor/BookCoverEditor";
 import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
@@ -21,7 +21,30 @@ import {
   normalizeBookHeadingFonts,
   type HeadingFontRole,
 } from "@/lib/typography/headingFonts";
+import { parseChapterContent } from "@/lib/pages/content";
+import {
+  chaptersWithChangedPages,
+  movePageByDrag,
+} from "@/lib/pages/moveChapterPage";
+import {
+  clearChapterDraft,
+  draftContentDiffers,
+  readChapterDraft,
+} from "@/lib/editor/chapterDraftBackup";
 import { useEditorSessionLock } from "@/components/editor/useEditorSessionLock";
+
+function defaultPageIdForChapter(chapter: Chapter): string | undefined {
+  const parsed = parseChapterContent(
+    chapter.content_json,
+    chapter.title,
+    chapter.content_html,
+  );
+  return (
+    parsed.pages.find((p) => p.kind === "chapter-cover")?.id ??
+    parsed.pages.find((p) => p.kind === "content")?.id ??
+    parsed.pages[0]?.id
+  );
+}
 
 type Props = {
   bookId: string;
@@ -48,6 +71,9 @@ export function EditorWorkspace({
   const [activeChapterId, setActiveChapterId] = useState(
     initialChapters[0]?.id ?? "",
   );
+  const [activePageByChapter, setActivePageByChapter] = useState<
+    Record<string, string>
+  >({});
   const [publishing, setPublishing] = useState(false);
   const [message, setMessage] = useState("");
   const initialReader = normalizeBookReaderFields(initialBook);
@@ -64,10 +90,14 @@ export function EditorWorkspace({
     "saved" | "pending" | "saving" | "error"
   >("saved");
   const [manualSaving, setManualSaving] = useState(false);
+  const [chapterEditorKey, setChapterEditorKey] = useState(0);
+  const [pageMoveError, setPageMoveError] = useState<string | null>(null);
 
   const editorRef = useRef<BookEditorHandle>(null);
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
+  const activePageByChapterRef = useRef(activePageByChapter);
+  activePageByChapterRef.current = activePageByChapter;
 
   const { status: lockStatus, retry: retryLock } = useEditorSessionLock(bookId);
 
@@ -118,13 +148,22 @@ export function EditorWorkspace({
         }
       };
 
-      try {
-        await attempt();
-      } catch {
-        await attempt();
+      let lastError: unknown;
+      for (let i = 0; i < 3; i++) {
+        try {
+          await attempt();
+          clearChapterDraft(bookId, chapterId);
+          return;
+        } catch (err) {
+          lastError = err;
+          if (i < 2) {
+            await new Promise((r) => setTimeout(r, 500 * (i + 1)));
+          }
+        }
       }
+      throw lastError;
     },
-    [],
+    [bookId],
   );
 
   const applyFlushedChapter = useCallback(
@@ -133,8 +172,8 @@ export function EditorWorkspace({
       contentJson: Record<string, unknown>;
       contentHtml: string;
     }) => {
-      setChapters((prev) =>
-        prev.map((c) =>
+      setChapters((prev) => {
+        const next = prev.map((c) =>
           c.id === flushed.chapterId
             ? {
                 ...c,
@@ -142,21 +181,19 @@ export function EditorWorkspace({
                 content_html: flushed.contentHtml,
               }
             : c,
-        ),
-      );
+        );
+        chaptersRef.current = next;
+        return next;
+      });
     },
     [],
   );
 
   const flushActiveChapter = useCallback(async (): Promise<boolean> => {
     if (editorPanel !== "chapter" || !editorRef.current) return true;
-    try {
-      const flushed = await editorRef.current.flushPendingSave();
-      if (flushed) applyFlushedChapter(flushed);
-      return true;
-    } catch {
-      return false;
-    }
+    const flushed = await editorRef.current.flushPendingSave();
+    if (flushed) applyFlushedChapter(flushed);
+    return flushed.saved;
   }, [editorPanel, applyFlushedChapter]);
 
   const saveAll = useCallback(async (): Promise<boolean> => {
@@ -376,20 +413,6 @@ export function EditorWorkspace({
     }
   };
 
-  const deleteChapter = async (id: string) => {
-    const res = await fetch(`/api/chapters/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (data.error) {
-      alert(data.error);
-      return;
-    }
-    const next = chapters.filter((c) => c.id !== id);
-    setChapters(next);
-    if (activeChapterId === id) {
-      setActiveChapterId(next[0]?.id ?? "");
-    }
-  };
-
   const renameChapter = async (id: string, title: string) => {
     setChapters((prev) =>
       prev.map((c) => (c.id === id ? { ...c, title } : c)),
@@ -402,15 +425,44 @@ export function EditorWorkspace({
   };
 
   const reorderChapters = async (ids: string[]) => {
+    if (editorPanel === "chapter") {
+      const ok = await blockIfUnsaved();
+      if (!ok) return;
+    }
+
+    const prev = chaptersRef.current;
     const reordered = ids
-      .map((id) => chapters.find((c) => c.id === id))
+      .map((id) => prev.find((c) => c.id === id))
       .filter(Boolean) as Chapter[];
+    if (reordered.length !== prev.length) return;
+
     setChapters(reordered);
-    await fetch(`/api/books/${bookId}/chapters`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ order: ids }),
-    });
+    chaptersRef.current = reordered;
+
+    try {
+      const res = await fetch(`/api/books/${bookId}/chapters`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ order: ids }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "장 순서 저장에 실패했습니다.",
+        );
+      }
+      setSaveState("saved");
+      setMessage("");
+    } catch (err) {
+      setChapters(prev);
+      chaptersRef.current = prev;
+      setSaveState("error");
+      setMessage(
+        err instanceof Error ? err.message : "장 순서 저장에 실패했습니다.",
+      );
+    }
   };
 
   const updateBookTitle = async (title: string) => {
@@ -448,35 +500,224 @@ export function EditorWorkspace({
     [book, bookId],
   );
 
+  const stashActiveChapter = useCallback(async (): Promise<boolean> => {
+    return flushActiveChapter();
+  }, [flushActiveChapter]);
+
+  const blockIfUnsaved = useCallback(async (): Promise<boolean> => {
+    const ok = await stashActiveChapter();
+    if (ok) return true;
+    window.alert(
+      "서버 저장에 실패했습니다.\n\n편집 내용은 브라우저에만 백업됩니다(서버·화면은 그대로). 「이 장 백업 불러오기」 또는 「전체 저장」을 사용하세요.",
+    );
+    return false;
+  }, [stashActiveChapter]);
+
+  const applyPageMove = useCallback(
+    async (nextChapters: Chapter[]) => {
+      const prev = chaptersRef.current;
+      const affected = chaptersWithChangedPages(prev, nextChapters);
+
+      let nextChapterId = activeChapterId;
+      const trackedPageId = activePageByChapterRef.current[activeChapterId];
+      if (trackedPageId) {
+        for (const ch of nextChapters) {
+          const parsed = parseChapterContent(
+            ch.content_json,
+            ch.title,
+            ch.content_html,
+          );
+          if (parsed.pages.some((p) => p.id === trackedPageId)) {
+            nextChapterId = ch.id;
+            break;
+          }
+        }
+      }
+
+      setChapters(nextChapters);
+      setChapterEditorKey((k) => k + 1);
+      setPageMoveError(null);
+      setActiveChapterId(nextChapterId);
+      if (trackedPageId) {
+        setActivePageByChapter((p) => ({
+          ...p,
+          [nextChapterId]: trackedPageId,
+        }));
+        if (nextChapterId === activeChapterId) {
+          requestAnimationFrame(() => {
+            editorRef.current?.selectPage(trackedPageId);
+          });
+        }
+      }
+
+      try {
+        await Promise.all(
+          affected.map((id) => {
+            const ch = nextChapters.find((c) => c.id === id);
+            if (!ch) return Promise.resolve();
+            return saveChapter(id, ch.content_json, ch.content_html);
+          }),
+        );
+        setSaveState("saved");
+        setMessage("");
+      } catch {
+        setSaveState("error");
+        setMessage("페이지 순서 저장에 실패했습니다.");
+      }
+    },
+    [activeChapterId, saveChapter],
+  );
+
+  const movePageByDragOrder = useCallback(
+    async (activePageId: string, overKey: string) => {
+      if (editorPanel === "chapter") {
+        const ok = await blockIfUnsaved();
+        if (!ok) return;
+      }
+
+      const prev = chaptersRef.current;
+      const result = movePageByDrag(prev, activePageId, overKey);
+      if ("error" in result) {
+        setPageMoveError(result.error);
+        return;
+      }
+
+      await applyPageMove(result.chapters);
+    },
+    [applyPageMove, blockIfUnsaved, editorPanel],
+  );
+
   const selectChapter = useCallback(
     async (id: string) => {
       if (id !== activeChapterId && editorPanel === "chapter") {
-        const ok = await flushActiveChapter();
-        if (!ok) {
-          alert(
-            "챕터 저장에 실패했습니다. 내용을 잃지 않으려면 「전체 저장」 후 다시 이동해 주세요.",
-          );
-          return;
-        }
+        const ok = await blockIfUnsaved();
+        if (!ok) return;
       }
       setEditorPanel("chapter");
       setActiveChapterId(id);
+      const ch = chaptersRef.current.find((c) => c.id === id);
+      const pageId = ch ? defaultPageIdForChapter(ch) : undefined;
+      if (pageId) {
+        setActivePageByChapter((prev) => ({ ...prev, [id]: pageId }));
+        if (id === activeChapterId) {
+          editorRef.current?.selectPage(pageId);
+        }
+      }
     },
-    [activeChapterId, editorPanel, flushActiveChapter],
+    [activeChapterId, blockIfUnsaved, editorPanel],
+  );
+
+  const selectChapterPage = useCallback(
+    async (chapterId: string, pageId: string) => {
+      if (chapterId !== activeChapterId && editorPanel === "chapter") {
+        const ok = await blockIfUnsaved();
+        if (!ok) return;
+      }
+      setEditorPanel("chapter");
+      setActiveChapterId(chapterId);
+      setActivePageByChapter((prev) => ({ ...prev, [chapterId]: pageId }));
+      if (chapterId === activeChapterId) {
+        editorRef.current?.selectPage(pageId);
+      }
+    },
+    [activeChapterId, blockIfUnsaved, editorPanel],
+  );
+
+  const deleteChapter = useCallback(
+    async (id: string) => {
+      const target = chaptersRef.current.find((c) => c.id === id);
+      if (!target) return;
+
+      const label = target.title.trim() || "제목 없음";
+      if (
+        !window.confirm(
+          `「${label}」 장을 삭제할까요?\n\n표지·본문·명언이 모두 지워지며 되돌릴 수 없습니다.`,
+        )
+      ) {
+        return;
+      }
+
+      if (editorPanel === "chapter" && activeChapterId === id) {
+        const ok = await blockIfUnsaved();
+        if (!ok) return;
+      }
+
+      const res = await fetch(`/api/chapters/${id}`, { method: "DELETE" });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        window.alert(
+          typeof data.error === "string"
+            ? data.error
+            : "장 삭제에 실패했습니다.",
+        );
+        return;
+      }
+
+      const next = chaptersRef.current.filter((c) => c.id !== id);
+      setChapters(next);
+      setActivePageByChapter((prev) => {
+        const { [id]: _removed, ...rest } = prev;
+        return rest;
+      });
+      setChapterEditorKey((k) => k + 1);
+      clearChapterDraft(bookId, id);
+
+      if (activeChapterId === id) {
+        const fallback = next[0];
+        if (fallback) {
+          selectChapter(fallback.id);
+        } else {
+          setEditorPanel("book-cover");
+        }
+      }
+    },
+    [activeChapterId, blockIfUnsaved, bookId, editorPanel, selectChapter],
   );
 
   const selectBookCover = useCallback(async () => {
     if (editorPanel === "chapter") {
-      const ok = await flushActiveChapter();
-      if (!ok) {
-        alert(
-          "챕터 저장에 실패했습니다. 내용을 잃지 않으려면 「전체 저장」 후 다시 이동해 주세요.",
-        );
-        return;
-      }
+      const ok = await blockIfUnsaved();
+      if (!ok) return;
     }
     setEditorPanel("book-cover");
-  }, [editorPanel, flushActiveChapter]);
+  }, [blockIfUnsaved, editorPanel]);
+
+  const activeChapterDraft = useMemo(() => {
+    if (!activeChapter) return null;
+    const draft = readChapterDraft(bookId, activeChapter.id);
+    if (!draft) return null;
+    if (!draftContentDiffers(draft, activeChapter.content_json)) return null;
+    return draft;
+  }, [activeChapter, bookId]);
+
+  const restoreActiveChapterDraft = useCallback(() => {
+    if (!activeChapter || !activeChapterDraft) return;
+
+    if (
+      !window.confirm(
+        "지금 보고 있는 「이 장」만 브라우저 백업으로 바꿉니다.\n\n다른 장·책 표지는 건드리지 않습니다. 계속할까요?",
+      )
+    ) {
+      return;
+    }
+
+    setChapters((prev) =>
+      prev.map((c) =>
+        c.id === activeChapter.id
+          ? {
+              ...c,
+              content_json: activeChapterDraft.contentJson,
+              content_html: activeChapterDraft.contentHtml,
+            }
+          : c,
+      ),
+    );
+    setChapterEditorKey((k) => k + 1);
+    setMessage(
+      "이 장만 백업에서 불러왔습니다. 내용 확인 후 「전체 저장」으로 서버에 반영하세요.",
+    );
+    setSaveState("pending");
+  }, [activeChapter, activeChapterDraft]);
 
   const publish = async () => {
     setPublishing(true);
@@ -655,6 +896,16 @@ export function EditorWorkspace({
           {saveState === "saving" && "저장 중…"}
           {saveState === "error" && "저장 실패 — 다시 시도해 주세요"}
         </span>
+        {activeChapterDraft && editorPanel === "chapter" ? (
+          <button
+            type="button"
+            onClick={restoreActiveChapterDraft}
+            title="서버와 다른 이 장의 브라우저 백업만 편집 화면에 불러옵니다"
+            className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-medium text-amber-950 hover:bg-amber-100"
+          >
+            이 장 백업 불러오기
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => void saveAll()}
@@ -724,7 +975,13 @@ export function EditorWorkspace({
       </header>
 
       {message && (
-        <div className="whitespace-pre-wrap bg-green-50 px-4 py-2 text-sm text-green-800">
+        <div
+          className={`whitespace-pre-wrap px-4 py-2 text-sm ${
+            saveState === "error"
+              ? "bg-red-50 text-red-800"
+              : "bg-green-50 text-green-800"
+          }`}
+        >
           {message}
         </div>
       )}
@@ -736,13 +993,21 @@ export function EditorWorkspace({
         <ChapterSidebar
           chapters={chapters}
           activeId={activeChapterId}
+          activePageId={activePageByChapter[activeChapterId] ?? null}
           bookCoverActive={editorPanel === "book-cover"}
           onSelectBookCover={selectBookCover}
           onSelect={selectChapter}
+          onSelectPage={selectChapterPage}
           onAdd={addChapter}
-          onDelete={deleteChapter}
           onRename={renameChapter}
+          onDelete={(id) => void deleteChapter(id)}
           onReorder={reorderChapters}
+          onPageDragEnd={(pageId, overId) =>
+            void movePageByDragOrder(pageId, overId)
+          }
+          onPageMoveError={setPageMoveError}
+          moveError={pageMoveError}
+          onClearMoveError={() => setPageMoveError(null)}
         />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {editorPanel === "book-cover" ? (
@@ -758,15 +1023,23 @@ export function EditorWorkspace({
           ) : activeChapter ? (
             <BookEditor
               ref={editorRef}
-              key={activeChapter.id}
+              key={`${activeChapter.id}-${chapterEditorKey}`}
               chapterId={activeChapter.id}
               chapterTitle={activeChapter.title}
               bookId={bookId}
               initialContent={activeChapter.content_json}
               initialContentHtml={activeChapter.content_html}
+              initialPageId={activePageByChapter[activeChapter.id]}
               onContentChange={updateChapterContent}
               onSave={saveChapter}
               onSaveState={setSaveState}
+              onSaveError={(msg) => setMessage(msg)}
+              onActivePageChange={(pageId) => {
+                setActivePageByChapter((prev) => ({
+                  ...prev,
+                  [activeChapter.id]: pageId,
+                }));
+              }}
             />
           ) : null}
         </div>
