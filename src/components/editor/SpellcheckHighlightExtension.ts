@@ -130,6 +130,7 @@ export const SpellcheckHighlight = Extension.create({
           const current = spellcheckHighlightKey.getState(state) ?? {
             marks: [],
             flash: null,
+            variant: "spellcheck" as const,
           };
           if (dispatch) {
             tr.setMeta(spellcheckHighlightKey, {
@@ -146,6 +147,7 @@ export const SpellcheckHighlight = Extension.create({
           const current = spellcheckHighlightKey.getState(state) ?? {
             marks: [],
             flash: null,
+            variant: "spellcheck" as const,
           };
           if (dispatch) {
             tr.setMeta(spellcheckHighlightKey, {

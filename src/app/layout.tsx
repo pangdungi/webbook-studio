@@ -1,21 +1,8 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_KR, Noto_Serif_KR } from "next/font/google";
 import { SupabaseProvider } from "@/components/providers/SupabaseProvider";
 import { getSupabaseAnonKey, getSupabaseUrl } from "@/lib/supabase/env";
 import { bookEditorCss } from "@/lib/typography/bookStyles";
 import "./globals.css";
-
-const notoSerif = Noto_Serif_KR({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-serif",
-});
-
-const notoSans = Noto_Sans_KR({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-  variable: "--font-sans-kr",
-});
 
 export const metadata: Metadata = {
   title: "Webbook Studio",
@@ -37,7 +24,19 @@ export default function RootLayout({
   const supabaseAnonKey = getSupabaseAnonKey();
 
   return (
-    <html lang="ko" className={`${notoSerif.variable} ${notoSans.variable} h-full`}>
+    <html lang="ko" className="h-full">
+      <head>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link
+          rel="preconnect"
+          href="https://fonts.gstatic.com"
+          crossOrigin="anonymous"
+        />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;600;700&family=Noto+Serif+KR:wght@400;600;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body className="h-full min-h-full bg-stone-50 font-sans antialiased">
         <style dangerouslySetInnerHTML={{ __html: bookEditorCss() }} />
         <SupabaseProvider url={supabaseUrl} anonKey={supabaseAnonKey}>
