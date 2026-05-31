@@ -12,6 +12,7 @@ import {
 } from "@/lib/books/coverStyle";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
 import { buildChapterSample } from "@/lib/readerAnalysis/sampleText";
+import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
 import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
 import type { Book, Chapter } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
@@ -201,6 +202,7 @@ export function EditorWorkspace({
 
     setManualSaving(true);
     setSaveState("saving");
+    setMessage("");
 
     try {
       let chaptersToSave = [...chaptersRef.current];
@@ -217,9 +219,33 @@ export function EditorWorkspace({
             : c,
         );
         applyFlushedChapter(flushed);
+        if (!flushed.saved) {
+          throw new Error(
+            "현재 장 자동 저장에 실패했습니다. 「전체 저장」을 다시 눌러 주세요.",
+          );
+        }
       }
 
-      await fetch(`/api/books/${bookId}`, {
+      for (const c of chaptersToSave) {
+        try {
+          await saveChapter(
+            c.id,
+            c.content_json,
+            c.content_html ?? "",
+            c.title,
+          );
+        } catch (err) {
+          const detail =
+            err instanceof Error ? err.message : "장 저장에 실패했습니다.";
+          throw new Error(`「${c.title}」 저장 실패: ${detail}`);
+        }
+      }
+
+      const normalizedReport = readerReport
+        ? normalizeReaderAnalysisReport(readerReport)
+        : null;
+
+      const bookRes = await fetch(`/api/books/${bookId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -228,35 +254,33 @@ export function EditorWorkspace({
           cover_bg_color: book.cover_bg_color,
           cover_title_color: book.cover_title_color,
           reader_pitch: readerPitch,
-          /* null을내면 DB 레포트가 삭제되므로, 분석 없을 때는 필드 생략 */
-          ...(readerReport ? { reader_analysis: readerReport } : {}),
+          ...(normalizedReport ? { reader_analysis: normalizedReport } : {}),
         }),
-      }).then(async (res) => {
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(
-            typeof data.error === "string" ? data.error : "책 정보 저장 실패",
-          );
-        }
       });
 
-      await Promise.all(
-        chaptersToSave.map((c) =>
-          saveChapter(
-            c.id,
-            c.content_json,
-            c.content_html ?? "",
-            c.title,
-          ),
-        ),
-      );
+      if (!bookRes.ok) {
+        const data = await bookRes.json().catch(() => ({}));
+        let errMsg =
+          typeof data.error === "string" ? data.error : "책 정보 저장 실패";
+        if (/column|does not exist|reader_|cover_|heading_fonts/i.test(errMsg)) {
+          errMsg = `${errMsg}\n\nSupabase SQL Editor에서 supabase/migrations/ 아래 마이그레이션 파일을 아직 안 돌렸을 수 있습니다.`;
+        }
+        if (bookRes.status === 401) {
+          errMsg = "로그인이 만료되었습니다. 다시 로그인한 뒤 저장해 주세요.";
+        }
+        throw new Error(errMsg);
+      }
 
       setChapters(chaptersToSave);
       setSaveState("saved");
+      setMessage("");
       return true;
-    } catch {
+    } catch (err) {
       setSaveState("error");
-      alert("저장에 실패했습니다. 네트워크를 확인한 뒤 다시 「전체 저장」을 눌러 주세요.");
+      const detail =
+        err instanceof Error ? err.message : "저장에 실패했습니다.";
+      setMessage(detail);
+      alert(`저장에 실패했습니다.\n\n${detail}`);
       return false;
     } finally {
       setManualSaving(false);

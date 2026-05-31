@@ -166,6 +166,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   ref,
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const saveInFlightRef = useRef(false);
   const chapterIdRef = useRef(chapterId);
   const bookIdRef = useRef(bookId);
   bookIdRef.current = bookId;
@@ -545,9 +546,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     saveTimer.current = null;
     const pending = pendingSaveRef.current;
     if (!pending) return true;
+    if (saveInFlightRef.current) return false;
 
     const payload = { ...pending };
     pendingSaveRef.current = null;
+    saveInFlightRef.current = true;
     onSaveStateRef.current?.("saving");
 
     try {
@@ -562,9 +565,13 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     } catch (err) {
       pendingSaveRef.current = payload;
       onSaveStateRef.current?.("error");
-      onSaveErrorRef.current?.(
-        err instanceof Error ? err.message : "저장에 실패했습니다.",
-      );
+      const msg =
+        err instanceof Error ? err.message : "저장에 실패했습니다.";
+      let detail = msg;
+      if (/401|Unauthorized/i.test(msg)) {
+        detail = "로그인이 만료되었습니다. 다시 로그인해 주세요.";
+      }
+      onSaveErrorRef.current?.(detail);
       writeChapterDraft({
         bookId: bookIdRef.current,
         chapterId: payload.chapterId,
@@ -573,6 +580,13 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         savedAt: Date.now(),
       });
       return false;
+    } finally {
+      saveInFlightRef.current = false;
+      if (pendingSaveRef.current) {
+        saveTimer.current = setTimeout(() => {
+          void flushSave();
+        }, 400);
+      }
     }
   }, []);
 
@@ -621,7 +635,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         void flushSave();
-      }, 800);
+      }, 1200);
     },
     [flushSave],
   );

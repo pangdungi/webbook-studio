@@ -20,6 +20,9 @@
 # production
 /build
 
+# supabase CLI local cache (project ref, versions — not for git)
+supabase/.temp/
+
 # misc
 .DS_Store
 *.pem
