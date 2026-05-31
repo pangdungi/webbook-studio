@@ -11,6 +11,13 @@ import {
   readerCookieOptions,
 } from "@/lib/access/readerSession";
 import {
+  bookIdFromEditPath,
+  isBookEditPagePath,
+  isBookVersionsViewPath,
+  isEditorMutationApiPath,
+  isLocalDevHostname,
+} from "@/lib/editor/localEditorOnly";
+import {
   isReaderOnlyHost,
   isStudioPlatformPath,
 } from "@/lib/utils/siteUrls";
@@ -96,6 +103,31 @@ export async function middleware(request: NextRequest) {
   const readerToken =
     request.cookies.get(READER_SESSION_COOKIE)?.value ??
     (tokenFromPath && !isAdmin ? tokenFromPath : undefined);
+
+  /* 편집·저장: 로컬 개발 호스트만 (배포 URL ↔ 로컬 DB 충돌 방지) */
+  if (!isLocalDevHostname(hostname)) {
+    if (isBookEditPagePath(pathname) && !isBookVersionsViewPath(pathname)) {
+      const bookId = bookIdFromEditPath(pathname);
+      const url = request.nextUrl.clone();
+      url.pathname = "/admin/edit-local-only";
+      url.search = "";
+      if (bookId) url.searchParams.set("bookId", bookId);
+      return NextResponse.redirect(url);
+    }
+
+    if (
+      pathname.startsWith("/api/") &&
+      isEditorMutationApiPath(pathname, request.method)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "편집·저장은 로컬 개발 서버(localhost)에서만 가능합니다. npm run dev 로 연 뒤 저장하세요.",
+        },
+        { status: 403 },
+      );
+    }
+  }
 
   /* 관리자는 플랫폼 사용 — 독자 잠금 쿠키 제거 */
   if (isAdmin && readerToken) {

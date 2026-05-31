@@ -20,6 +20,7 @@ import {
   normalizeContentPageDoc,
   parseChapterContent,
 } from "@/lib/pages/content";
+import { buildContentPageStorageHtml } from "@/lib/editor/contentPageStorageHtml";
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
 import {
   clampEditorPageZoom,
@@ -99,6 +100,8 @@ type Props = {
   ) => void | Promise<void>;
   onSaveState?: (state: "pending" | "saving" | "saved" | "error") => void;
   onSaveError?: (message: string) => void;
+  /** 서버가 더 최신일 때 — 자동 저장·서버 PATCH 중단 */
+  savePaused?: boolean;
   initialPageId?: string;
   onActivePageChange?: (pageId: string) => void;
 };
@@ -160,6 +163,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   onSave,
   onSaveState,
   onSaveError,
+  savePaused = false,
   initialPageId,
   onActivePageChange,
   },
@@ -167,6 +171,8 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
 ) {
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const saveInFlightRef = useRef(false);
+  const savePausedRef = useRef(savePaused);
+  savePausedRef.current = savePaused;
   const chapterIdRef = useRef(chapterId);
   const bookIdRef = useRef(bookId);
   bookIdRef.current = bookId;
@@ -523,12 +529,26 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     if (snap) {
       nextPages = nextPages.map((p) =>
         p.id === fromId
-          ? { ...p, content: snap.json, content_html: snap.html }
+          ? {
+              ...p,
+              content: snap.json,
+              content_html: buildContentPageStorageHtml({
+                ...p,
+                content: snap.json,
+              } as BookPage),
+            }
           : p,
       );
       pagesRef.current = nextPages;
       setPages(nextPages);
     }
+
+    nextPages = nextPages.map((p) =>
+      p.kind === "content"
+        ? { ...p, content_html: buildContentPageStorageHtml(p) }
+        : p,
+    );
+    pagesRef.current = nextPages;
 
     const json = chapterContentToJson(nextPages) as unknown as Record<
       string,
@@ -547,6 +567,14 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     const pending = pendingSaveRef.current;
     if (!pending) return true;
     if (saveInFlightRef.current) return false;
+
+    if (savePausedRef.current) {
+      onSaveStateRef.current?.("error");
+      onSaveErrorRef.current?.(
+        "다른 곳에서 더 최근에 저장된 내용이 있어 서버 저장이 중단되었습니다. 상단 안내를 확인하세요.",
+      );
+      return false;
+    }
 
     const payload = { ...pending };
     pendingSaveRef.current = null;
@@ -632,6 +660,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         savedAt: Date.now(),
       });
 
+      if (savePausedRef.current) {
+        onSaveStateRef.current?.("error");
+        return;
+      }
+
       if (saveTimer.current) clearTimeout(saveTimer.current);
       saveTimer.current = setTimeout(() => {
         void flushSave();
@@ -643,14 +676,16 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const handlePageUpdate = useCallback(
     (pageId: string, json: Record<string, unknown>) => {
       const normalized = normalizeContentPageDoc(json);
-      const html = contentPageDocToHtml(normalized);
       setPages((prev) => {
         const next = prev.map((p) =>
           p.id === pageId
             ? {
                 ...p,
                 content: normalized,
-                content_html: html,
+                content_html: buildContentPageStorageHtml({
+                  ...p,
+                  content: normalized,
+                } as BookPage),
               }
             : p,
         );

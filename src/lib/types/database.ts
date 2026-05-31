@@ -44,6 +44,15 @@ export type Chapter = {
   updated_at: string;
 };
 
+export type BookVersion = {
+  id: string;
+  book_id: string;
+  label: string;
+  snapshot: import("@/lib/books/bookVersionSnapshot").BookVersionSnapshot;
+  created_by: string;
+  created_at: string;
+};
+
 export type BookAccessToken = {
   id: string;
   book_id: string;

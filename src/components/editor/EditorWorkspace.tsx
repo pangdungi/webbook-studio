@@ -32,6 +32,16 @@ import {
   draftContentDiffers,
   readChapterDraft,
 } from "@/lib/editor/chapterDraftBackup";
+import {
+  isChapterSaveConflict,
+  parseChapterPatchResponse,
+} from "@/lib/editor/chapterSave";
+import {
+  chaptersFromSnapshot,
+  type BookVersionSnapshot,
+} from "@/lib/books/bookVersionSnapshot";
+import { BookVersionsPanel, createAutoBookVersionIfChanged } from "@/components/editor/BookVersionsPanel";
+import { getEditorEnvironmentLabel } from "@/lib/editor/editorEnvironment";
 import { useEditorSessionLock } from "@/components/editor/useEditorSessionLock";
 
 function defaultPageIdForChapter(chapter: Chapter): string | undefined {
@@ -93,16 +103,79 @@ export function EditorWorkspace({
   const [manualSaving, setManualSaving] = useState(false);
   const [chapterEditorKey, setChapterEditorKey] = useState(0);
   const [pageMoveError, setPageMoveError] = useState<string | null>(null);
+  const [versionsPanelOpen, setVersionsPanelOpen] = useState(false);
+  const [versionPreview, setVersionPreview] = useState<{
+    snapshot: BookVersionSnapshot;
+    label: string;
+  } | null>(null);
 
   const editorRef = useRef<BookEditorHandle>(null);
   const chaptersRef = useRef(chapters);
   chaptersRef.current = chapters;
   const activePageByChapterRef = useRef(activePageByChapter);
   activePageByChapterRef.current = activePageByChapter;
+  const chapterBaselineRef = useRef<Record<string, string>>({});
+  const dirtyChapterIdsRef = useRef(new Set<string>());
+  const [savePaused, setSavePaused] = useState(false);
+  const [staleBanner, setStaleBanner] = useState<string | null>(null);
+  const [envLabel, setEnvLabel] = useState<string | null>(null);
+
+  useEffect(() => {
+    const baseline: Record<string, string> = {};
+    for (const c of initialChapters) baseline[c.id] = c.updated_at;
+    chapterBaselineRef.current = baseline;
+  }, [initialChapters]);
+
+  useEffect(() => {
+    setEnvLabel(getEditorEnvironmentLabel());
+  }, []);
 
   const { status: lockStatus, retry: retryLock } = useEditorSessionLock(bookId);
 
-  const activeChapter = chapters.find((c) => c.id === activeChapterId);
+  const markChapterDirty = useCallback((chapterId: string) => {
+    dirtyChapterIdsRef.current.add(chapterId);
+  }, []);
+
+  const applySavedChapter = useCallback((chapter: Chapter) => {
+    chapterBaselineRef.current[chapter.id] = chapter.updated_at;
+    dirtyChapterIdsRef.current.delete(chapter.id);
+    setChapters((prev) => {
+      const next = prev.map((c) => (c.id === chapter.id ? chapter : c));
+      chaptersRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const handleStaleConflict = useCallback((detail?: string) => {
+    setStaleBanner(
+      detail ??
+        "다른 곳(배포 사이트·다른 탭 등)에서 더 최근에 저장된 내용이 있어, 이 화면은 서버에 올리지 않습니다.",
+    );
+    setSaveState("error");
+  }, []);
+
+  const displayChapters = useMemo(() => {
+    if (!versionPreview) return chapters;
+    return chaptersFromSnapshot(bookId, versionPreview.snapshot, chapters);
+  }, [bookId, chapters, versionPreview]);
+
+  const displayBook = useMemo(() => {
+    if (!versionPreview) return book;
+    const s = versionPreview.snapshot.book;
+    return {
+      ...book,
+      title: s.title,
+      subtitle: s.subtitle,
+      cover_bg_color: s.cover_bg_color,
+      cover_title_color: s.cover_title_color,
+      heading_fonts: s.heading_fonts,
+      reader_pitch: s.reader_pitch,
+      reader_analysis: s.reader_analysis,
+    };
+  }, [book, versionPreview]);
+
+  const activeChapter = displayChapters.find((c) => c.id === activeChapterId);
+  const editorFrozen = !!versionPreview || savePaused;
 
   const updateChapterContent = useCallback(
     (
@@ -110,6 +183,7 @@ export function EditorWorkspace({
       contentJson: Record<string, unknown>,
       contentHtml: string,
     ) => {
+      markChapterDirty(chapterId);
       setChapters((prev) =>
         prev.map((c) =>
           c.id === chapterId
@@ -118,8 +192,34 @@ export function EditorWorkspace({
         ),
       );
     },
-    [],
+    [markChapterDirty],
   );
+
+  const reloadChaptersFromServer = useCallback(async () => {
+    const res = await fetch(`/api/books/${bookId}/chapters`, { cache: "no-store" });
+    const data = (await res.json().catch(() => ({}))) as {
+      chapters?: Chapter[];
+      error?: string;
+    };
+    if (!res.ok || !data.chapters) {
+      throw new Error(
+        typeof data.error === "string"
+          ? data.error
+          : "서버에서 최신 내용을 불러오지 못했습니다.",
+      );
+    }
+    for (const c of data.chapters) {
+      chapterBaselineRef.current[c.id] = c.updated_at;
+    }
+    dirtyChapterIdsRef.current.clear();
+    chaptersRef.current = data.chapters;
+    setChapters(data.chapters);
+    setSavePaused(false);
+    setStaleBanner(null);
+    setChapterEditorKey((k) => k + 1);
+    setSaveState("saved");
+    setMessage("서버의 최신 내용을 불러왔습니다.");
+  }, [bookId]);
 
   const saveChapter = useCallback(
     async (
@@ -128,9 +228,21 @@ export function EditorWorkspace({
       contentHtml: string,
       title?: string,
     ) => {
+      if (savePaused) {
+        throw new Error(
+          "다른 곳에서 더 최근에 저장된 내용이 있어 서버에 올리지 않았습니다.",
+        );
+      }
+
+      const ifUpdatedAt = chapterBaselineRef.current[chapterId];
+      if (!ifUpdatedAt) {
+        throw new Error("장 버전 정보가 없습니다. 페이지를 새로고침해 주세요.");
+      }
+
       const body = JSON.stringify({
         content_json: contentJson,
         content_html: contentHtml,
+        if_updated_at: ifUpdatedAt,
         ...(title !== undefined ? { title } : {}),
       });
 
@@ -141,22 +253,22 @@ export function EditorWorkspace({
           body,
           keepalive: true,
         });
-        if (!res.ok) {
-          const data = await res.json().catch(() => ({}));
-          throw new Error(
-            typeof data.error === "string" ? data.error : "저장에 실패했습니다.",
-          );
-        }
+        return parseChapterPatchResponse(res);
       };
 
       let lastError: unknown;
       for (let i = 0; i < 3; i++) {
         try {
-          await attempt();
+          const saved = await attempt();
+          applySavedChapter(saved);
           clearChapterDraft(bookId, chapterId);
           return;
         } catch (err) {
           lastError = err;
+          if (isChapterSaveConflict(err)) {
+            handleStaleConflict(err.message);
+            throw err;
+          }
           if (i < 2) {
             await new Promise((r) => setTimeout(r, 500 * (i + 1)));
           }
@@ -164,7 +276,7 @@ export function EditorWorkspace({
       }
       throw lastError;
     },
-    [bookId],
+    [applySavedChapter, bookId, handleStaleConflict, savePaused],
   );
 
   const applyFlushedChapter = useCallback(
@@ -226,7 +338,12 @@ export function EditorWorkspace({
         }
       }
 
-      for (const c of chaptersToSave) {
+      const idsToSave = new Set(dirtyChapterIdsRef.current);
+      if (flushed) idsToSave.add(flushed.chapterId);
+
+      for (const id of idsToSave) {
+        const c = chaptersToSave.find((ch) => ch.id === id);
+        if (!c) continue;
         try {
           await saveChapter(
             c.id,
@@ -235,6 +352,7 @@ export function EditorWorkspace({
             c.title,
           );
         } catch (err) {
+          if (isChapterSaveConflict(err)) throw err;
           const detail =
             err instanceof Error ? err.message : "장 저장에 실패했습니다.";
           throw new Error(`「${c.title}」 저장 실패: ${detail}`);
@@ -274,6 +392,11 @@ export function EditorWorkspace({
       setChapters(chaptersToSave);
       setSaveState("saved");
       setMessage("");
+      try {
+        await createAutoBookVersionIfChanged(bookId, book, chaptersToSave);
+      } catch {
+        /* 버전 저장 실패해도 본 저장은 성공 */
+      }
       return true;
     } catch (err) {
       setSaveState("error");
@@ -432,20 +555,39 @@ export function EditorWorkspace({
     });
     const data = await res.json();
     if (data.chapter) {
+      chapterBaselineRef.current[data.chapter.id] = data.chapter.updated_at;
       setChapters((prev) => [...prev, data.chapter]);
       setActiveChapterId(data.chapter.id);
     }
   };
 
   const renameChapter = async (id: string, title: string) => {
+    if (savePaused) {
+      window.alert(
+        "다른 곳에서 더 최근에 저장된 내용이 있어 이름 변경을 서버에 반영할 수 없습니다.",
+      );
+      return;
+    }
+    const ifUpdatedAt = chapterBaselineRef.current[id];
     setChapters((prev) =>
       prev.map((c) => (c.id === id ? { ...c, title } : c)),
     );
-    await fetch(`/api/chapters/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title }),
-    });
+    markChapterDirty(id);
+    try {
+      const res = await fetch(`/api/chapters/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, if_updated_at: ifUpdatedAt }),
+      });
+      const saved = await parseChapterPatchResponse(res);
+      applySavedChapter(saved);
+    } catch (err) {
+      if (isChapterSaveConflict(err)) {
+        handleStaleConflict(err.message);
+        return;
+      }
+      setMessage("장 제목 저장에 실패했습니다.");
+    }
   };
 
   const reorderChapters = async (ids: string[]) => {
@@ -529,12 +671,8 @@ export function EditorWorkspace({
   }, [flushActiveChapter]);
 
   const blockIfUnsaved = useCallback(async (): Promise<boolean> => {
-    const ok = await stashActiveChapter();
-    if (ok) return true;
-    window.alert(
-      "서버 저장에 실패했습니다.\n\n편집 내용은 브라우저에만 백업됩니다(서버·화면은 그대로). 「이 장 백업 불러오기」 또는 「전체 저장」을 사용하세요.",
-    );
-    return false;
+    await stashActiveChapter();
+    return true;
   }, [stashActiveChapter]);
 
   const applyPageMove = useCallback(
@@ -575,6 +713,7 @@ export function EditorWorkspace({
       }
 
       try {
+        for (const id of affected) markChapterDirty(id);
         await Promise.all(
           affected.map((id) => {
             const ch = nextChapters.find((c) => c.id === id);
@@ -589,7 +728,7 @@ export function EditorWorkspace({
         setMessage("페이지 순서 저장에 실패했습니다.");
       }
     },
-    [activeChapterId, saveChapter],
+    [activeChapterId, markChapterDirty, saveChapter],
   );
 
   const movePageByDragOrder = useCallback(
@@ -737,11 +876,12 @@ export function EditorWorkspace({
       ),
     );
     setChapterEditorKey((k) => k + 1);
+    markChapterDirty(activeChapter.id);
     setMessage(
       "이 장만 백업에서 불러왔습니다. 내용 확인 후 「전체 저장」으로 서버에 반영하세요.",
     );
     setSaveState("pending");
-  }, [activeChapter, activeChapterDraft]);
+  }, [activeChapter, activeChapterDraft, markChapterDirty]);
 
   const publish = async () => {
     setPublishing(true);
@@ -826,6 +966,35 @@ export function EditorWorkspace({
 
   return (
     <div className="flex h-[100dvh] flex-col">
+      {envLabel ? (
+        <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-950">
+          {envLabel}
+        </div>
+      ) : null}
+      {staleBanner ? (
+        <div className="shrink-0 border-b border-red-200 bg-red-50 px-4 py-3 text-sm text-red-950">
+          <p>{staleBanner}</p>
+          <p className="mt-1 text-xs text-red-800/90">
+            이 탭의 글은 서버에 올라가지 않습니다. 배포 사이트에서 저장한 내용을 유지하려면 아래를
+            누르세요.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              void reloadChaptersFromServer().catch((err) => {
+                const detail =
+                  err instanceof Error
+                    ? err.message
+                    : "서버에서 최신 내용을 불러오지 못했습니다.";
+                window.alert(detail);
+              });
+            }}
+            className="mt-2 rounded-lg bg-red-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-red-950"
+          >
+            서버 최신 내용 불러오기
+          </button>
+        </div>
+      ) : null}
       <header className="flex shrink-0 items-center gap-4 border-b border-stone-200 bg-white px-4 py-3">
         <button
           type="button"
@@ -933,11 +1102,30 @@ export function EditorWorkspace({
         <button
           type="button"
           onClick={() => void saveAll()}
-          disabled={manualSaving || publishing}
-          title="모든 챕터·설정을 서버에 저장 (⌘S / Ctrl+S)"
+          disabled={manualSaving || publishing || savePaused}
+          title={
+            savePaused
+              ? "다른 곳에서 더 최근에 저장되어 전체 저장이 막혀 있습니다"
+              : "수정한 장·설정만 서버에 저장 (⌘S / Ctrl+S)"
+          }
           className="rounded-lg border border-stone-300 px-4 py-2 text-sm font-medium text-stone-800 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {manualSaving ? "저장 중…" : "전체 저장"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setVersionsPanelOpen((o) => !o);
+            if (!versionsPanelOpen) setReaderPanelOpen(false);
+          }}
+          aria-pressed={versionsPanelOpen}
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+            versionsPanelOpen
+              ? "border-sky-400 bg-sky-100 text-sky-950"
+              : "border-sky-200 bg-sky-50 text-sky-950 hover:bg-sky-100"
+          }`}
+        >
+          버전
         </button>
         <button
           type="button"
@@ -998,6 +1186,21 @@ export function EditorWorkspace({
         </button>
       </header>
 
+      {versionPreview ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-950">
+          <span>
+            버전 「{versionPreview.label}」 보기 중 (읽기 전용 — 저장되지 않음)
+          </span>
+          <button
+            type="button"
+            onClick={() => setVersionPreview(null)}
+            className="rounded-lg bg-sky-900 px-3 py-1 text-xs font-medium text-white"
+          >
+            현재 편집본으로 돌아가기
+          </button>
+        </div>
+      ) : null}
+
       {message && (
         <div
           className={`whitespace-pre-wrap px-4 py-2 text-sm ${
@@ -1012,10 +1215,10 @@ export function EditorWorkspace({
 
       <div
         className="flex min-h-0 flex-1"
-        style={headingFontCssVariables(book.heading_fonts)}
+        style={headingFontCssVariables(displayBook.heading_fonts)}
       >
         <ChapterSidebar
-          chapters={chapters}
+          chapters={displayChapters}
           activeId={activeChapterId}
           activePageId={activePageByChapter[activeChapterId] ?? null}
           bookCoverActive={editorPanel === "book-cover"}
@@ -1036,11 +1239,11 @@ export function EditorWorkspace({
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {editorPanel === "book-cover" ? (
             <BookCoverEditor
-              title={book.title}
-              subtitle={book.subtitle}
+              title={displayBook.title}
+              subtitle={displayBook.subtitle}
               cover={{
-                cover_bg_color: book.cover_bg_color,
-                cover_title_color: book.cover_title_color,
+                cover_bg_color: displayBook.cover_bg_color,
+                cover_title_color: displayBook.cover_title_color,
               }}
               onCoverChange={(patch) => void updateCoverStyle(patch)}
             />
@@ -1056,6 +1259,7 @@ export function EditorWorkspace({
               initialPageId={activePageByChapter[activeChapter.id]}
               onContentChange={updateChapterContent}
               onSave={saveChapter}
+              savePaused={editorFrozen}
               onSaveState={setSaveState}
               onSaveError={(msg) => setMessage(msg)}
               onActivePageChange={(pageId) => {
@@ -1067,6 +1271,45 @@ export function EditorWorkspace({
             />
           ) : null}
         </div>
+        {versionsPanelOpen && (
+          <BookVersionsPanel
+            bookId={bookId}
+            book={book}
+            chapters={chapters}
+            onPreview={(snapshot, label) => {
+              setVersionPreview({ snapshot, label });
+              setVersionsPanelOpen(false);
+            }}
+            onRestored={(nextBook, nextChapters) => {
+              setVersionPreview(null);
+              setBook((b) => ({
+                ...b,
+                ...nextBook,
+                ...normalizeBookCoverStyle(nextBook),
+                heading_fonts: normalizeBookHeadingFonts(nextBook.heading_fonts),
+                ...normalizeBookReaderFields(nextBook),
+              }));
+              setReaderPitch(
+                normalizeBookReaderFields(nextBook).reader_pitch,
+              );
+              setReaderReport(
+                normalizeBookReaderFields(nextBook).reader_analysis,
+              );
+              for (const c of nextChapters) {
+                chapterBaselineRef.current[c.id] = c.updated_at;
+              }
+              dirtyChapterIdsRef.current.clear();
+              setSavePaused(false);
+              setStaleBanner(null);
+              chaptersRef.current = nextChapters;
+              setChapters(nextChapters);
+              setChapterEditorKey((k) => k + 1);
+              setMessage("버전을 복원했습니다. 내용을 확인한 뒤 저장하세요.");
+              setSaveState("pending");
+            }}
+            onClose={() => setVersionsPanelOpen(false)}
+          />
+        )}
         {readerPanelOpen && (
           <ReaderAnalysisPanel
             pitch={readerPitch}

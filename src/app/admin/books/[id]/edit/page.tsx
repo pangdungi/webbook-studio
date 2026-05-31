@@ -1,5 +1,7 @@
-import { notFound } from "next/navigation";
+import { headers } from "next/headers";
+import { notFound, redirect } from "next/navigation";
 import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
+import { isLocalDevHostname } from "@/lib/editor/localEditorOnly";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
@@ -12,7 +14,12 @@ export default async function EditBookPage({ params }: PageProps) {
   const admin = await requireAdmin();
   if (!admin) notFound();
 
+  const host = (await headers()).get("host")?.split(":")[0] ?? "";
   const { id } = await params;
+
+  if (!isLocalDevHostname(host)) {
+    redirect(`/admin/edit-local-only?bookId=${id}`);
+  }
   const supabase = await createClient();
 
   const { data: book } = await supabase

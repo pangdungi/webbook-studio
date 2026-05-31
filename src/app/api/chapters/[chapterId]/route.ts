@@ -20,15 +20,60 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (typeof body.content_html === "string")
     updates.content_html = body.content_html;
 
-  const { data, error } = await supabase
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
+  }
+
+  const ifUpdatedAt =
+    typeof body.if_updated_at === "string" ? body.if_updated_at : null;
+
+  let updateQuery = supabase
     .from("chapters")
     .update(updates)
-    .eq("id", chapterId)
-    .select("*, books!inner(created_by)")
-    .single();
+    .eq("id", chapterId);
 
-  if (error || !data) {
-    return NextResponse.json({ error: error?.message ?? "Not found" }, { status: 404 });
+  if (ifUpdatedAt) {
+    updateQuery = updateQuery.eq("updated_at", ifUpdatedAt);
+  }
+
+  const { data, error } = await updateQuery
+    .select("*, books!inner(created_by)")
+    .maybeSingle();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!data) {
+    if (!ifUpdatedAt) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const { data: current, error: readError } = await supabase
+      .from("chapters")
+      .select("*, books!inner(created_by)")
+      .eq("id", chapterId)
+      .single();
+
+    if (readError || !current) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const bookMetaCurrent = current.books as unknown as { created_by: string };
+    if (bookMetaCurrent.created_by !== admin.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
+    const { books: _books, ...chapter } = current;
+    return NextResponse.json(
+      {
+        error:
+          "다른 탭·다른 주소(로컬/배포)에서 더 최근에 저장된 내용이 있습니다. 이 화면을 서버에 올리지 않았습니다.",
+        code: "STALE_CHAPTER",
+        chapter,
+      },
+      { status: 409 },
+    );
   }
 
   const bookMeta = data.books as unknown as { created_by: string };

@@ -9,18 +9,19 @@ import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: Request, context: RouteContext) {
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const { bookId } = await context.params;
+  const syncOnly = new URL(request.url).searchParams.get("sync") === "1";
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("chapters")
-    .select("*")
+    .select(syncOnly ? "id, updated_at" : "*")
     .eq("book_id", bookId)
     .order("sort_order", { ascending: true });
 

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { CopyField } from "@/components/home/CopyField";
+import {
+  isLocalEditorClient,
+  localEditorUrl,
+} from "@/lib/editor/localEditorOnly";
 import { createClient } from "@/lib/supabase/client";
 import type { Book } from "@/lib/types/database";
 
@@ -27,6 +31,14 @@ export function BookDashboard() {
   }, [loadBooks]);
 
   const createBook = async () => {
+    if (!isLocalEditorClient()) {
+      window.alert(
+        `새 책·편집은 로컬에서만 가능합니다.\n\n터미널에서 npm run dev 실행 후\n${localEditorUrl("/")}\n에서 작업하세요.`,
+      );
+      window.open(localEditorUrl("/"), "_blank", "noopener,noreferrer");
+      return;
+    }
+
     const res = await fetch("/api/books", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -39,6 +51,12 @@ export function BookDashboard() {
   };
 
   const deleteBook = async (book: BookListItem) => {
+    if (!isLocalEditorClient()) {
+      window.alert(
+        `삭제·편집은 로컬 개발 서버에서만 가능합니다.\n${localEditorUrl("/")}`,
+      );
+      return;
+    }
     const label =
       book.title.trim() || "제목 없음";
     if (
@@ -72,8 +90,26 @@ export function BookDashboard() {
     return <p className="text-stone-500">불러오는 중...</p>;
   }
 
+  const onLocal = isLocalEditorClient();
+
   return (
     <div>
+      {!onLocal ? (
+        <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <strong>편집·저장·출판은 로컬만.</strong> 이 배포 사이트에서는 책 목록·독자
+          링크·미리보기만 하세요. 글 작업은{" "}
+          <a
+            href={localEditorUrl("/")}
+            className="font-medium underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {localEditorUrl("/")}
+          </a>
+          에서 <code className="rounded bg-amber-100/80 px-1">npm run dev</code> 후
+          편집하세요.
+        </div>
+      ) : null}
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-stone-900">내 책</h1>
@@ -210,12 +246,18 @@ export function BookDashboard() {
                 ) : null}
 
                 <div className="mt-auto flex flex-wrap gap-2">
-                  <Link
-                    href={`/admin/books/${book.id}/edit`}
+                  <a
+                    href={localEditorUrl(`/admin/books/${book.id}/edit`)}
                     className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
                   >
-                    편집
-                  </Link>
+                    편집 (로컬)
+                  </a>
+                  <a
+                    href={`/admin/books/${book.id}/versions`}
+                    className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-950 hover:bg-sky-100"
+                  >
+                    버전
+                  </a>
                   <a
                     href={`/admin/books/${book.id}/preview`}
                     target="_blank"
