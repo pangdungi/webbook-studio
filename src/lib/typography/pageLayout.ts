@@ -21,8 +21,7 @@ import {
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
 import {
   buildPageLeadHtml,
-  contentDocWithoutLead,
-  extractFirstHeadingFromDoc,
+  splitPageContentLead,
 } from "@/lib/pages/pageTitle";
 import type { BookPage } from "@/lib/pages/types";
 import { wrapImagesInHtml } from "@/lib/typography/imageLayout";
@@ -74,8 +73,7 @@ export function buildPageEpubHtml(
     return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${bookPageClass} ${bookPageQuoteClass}"><div class="${bookPageBodyClass}">${body}</div></article></div>`;
   }
 
-  const lead = extractFirstHeadingFromDoc(page.content);
-  const bodyDoc = lead ? contentDocWithoutLead(page.content) : page.content;
+  const { lead, bodyDoc } = splitPageContentLead(page);
   const bodyInner = wrapImagesInHtml(
     contentPageDocToHtml(bodyDoc).trim() || "<p class=\"book-body-p\"></p>",
   );

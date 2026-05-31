@@ -10,6 +10,7 @@ import {
   bookPageContentClass,
   bookPageCoverClass,
   bookPageShellClass,
+  BOOK_PAGE_REF_WIDTH,
   syncBookPageMetrics,
 } from "@/lib/pages/bookPageCss";
 import {
@@ -20,12 +21,22 @@ import {
   parseChapterContent,
 } from "@/lib/pages/content";
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
+import {
+  clampEditorPageZoom,
+  EDITOR_PAGE_ZOOM_DEFAULT,
+  EDITOR_PAGE_ZOOM_MAX,
+  EDITOR_PAGE_ZOOM_MIN,
+  EDITOR_PAGE_ZOOM_STEP,
+  formatEditorPageZoomLabel,
+  loadEditorPageZoom,
+  saveEditorPageZoom,
+} from "@/lib/editor/pageZoom";
 import { typographyGuide } from "@/lib/typography/bookStyles";
 import type { BookPage, PageKind } from "@/lib/pages/types";
 import {
-  extractFirstHeadingFromDoc,
+  getPageSubtitle,
   getPageTocLabel,
-  setFirstHeadingInDoc,
+  pageSubtitleInputValue,
 } from "@/lib/pages/pageTitle";
 import { quoteContentToHtml } from "@/lib/pages/quotePage";
 import { useCallback, useEffect, useImperativeHandle, useRef, useState, forwardRef } from "react";
@@ -50,11 +61,15 @@ import {
 import {
   buildReviewParagraphs,
   buildReviewParagraphsFromPlain,
+  joinAlignedRevisedText,
   deriveReviewHighlights,
   deriveReviewHighlightsFromPlain,
   type ReviewParagraphChunk,
 } from "@/lib/writingReview/compare";
-import { listEditorBlockLines } from "@/lib/writingReview/editorBlocks";
+import {
+  getWritingReviewPlainFromEditor,
+  listEditorBlockLines,
+} from "@/lib/writingReview/editorBlocks";
 import {
   attachNotesToParagraphs,
   type ParagraphNote,
@@ -165,7 +180,9 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   } | null>(null);
   const editorsRef = useRef<Map<string, Editor | null>>(new Map());
   const shellRef = useRef<HTMLDivElement>(null);
+  const zoomHostRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [pageZoom, setPageZoom] = useState(EDITOR_PAGE_ZOOM_DEFAULT);
   const pageRefs = useRef<Map<string, HTMLElement>>(new Map());
 
   const initialPages = parseChapterContent(
@@ -613,7 +630,6 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     (pageId: string, json: Record<string, unknown>) => {
       const normalized = normalizeContentPageDoc(json);
       const html = contentPageDocToHtml(normalized);
-      const heading = extractFirstHeadingFromDoc(normalized);
       setPages((prev) => {
         const next = prev.map((p) =>
           p.id === pageId
@@ -621,7 +637,6 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                 ...p,
                 content: normalized,
                 content_html: html,
-                title: heading?.text ?? p.title ?? "",
               }
             : p,
         );
@@ -635,29 +650,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const handlePageTitleChange = useCallback(
     (pageId: string, title: string) => {
       setPages((prev) => {
-        const next = prev.map((p) => {
-          if (p.id !== pageId) return p;
-
-          if (p.kind === "content") {
-            const doc = setFirstHeadingInDoc(
-              normalizeContentPageDoc(p.content),
-              title,
-            );
-            const html = contentPageDocToHtml(doc);
-            const editor = editorsRef.current.get(pageId);
-            if (editor && activePageIdRef.current === pageId) {
-              editor.commands.setContent(doc, false);
-            }
-            return {
-              ...p,
-              title,
-              content: doc,
-              content_html: html,
-            };
-          }
-
-          return { ...p, title };
-        });
+        const next = prev.map((p) => (p.id === pageId ? { ...p, title } : p));
         queueMicrotask(() => persist(next));
         return next;
       });
@@ -693,16 +686,81 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   );
 
   useEffect(() => {
+    setPageZoom(loadEditorPageZoom());
+  }, []);
+
+  const applyPageZoom = useCallback((next: number) => {
+    const z = clampEditorPageZoom(next);
+    setPageZoom(z);
+    saveEditorPageZoom(z);
+  }, []);
+
+  /** 스크롤 영역 너비 기준 — shell 실측×줌은 페이지마다 폭이 줄어드는 버그 유발 */
+  const syncEditorPageZoomLayout = useCallback(() => {
+    const scroll = scrollRef.current;
     const shell = shellRef.current;
-    if (!shell) return;
+    const host = zoomHostRef.current;
+    if (!scroll || !shell || !host) return;
 
-    const sync = () => syncBookPageMetrics(shell);
+    const padPx = 48;
+    const maxPagePx =
+      typeof window !== "undefined"
+        ? Math.min(
+            672,
+            Math.round(
+              parseFloat(
+                getComputedStyle(document.documentElement).fontSize || "16",
+              ) * 42,
+            ),
+          )
+        : 672;
+    const baseW = Math.min(
+      maxPagePx,
+      Math.max(280, scroll.clientWidth - padPx),
+    );
 
-    sync();
-    const ro = new ResizeObserver(sync);
-    ro.observe(shell);
-    return () => ro.disconnect();
-  }, [pages.length]);
+    shell.style.width = `${baseW}px`;
+    shell.style.maxWidth = BOOK_PAGE_REF_WIDTH;
+    shell.style.transform = "";
+    shell.style.transformOrigin = "";
+    syncBookPageMetrics(shell);
+
+    if (pageZoom === 1) {
+      host.style.zoom = "";
+    } else {
+      host.style.zoom = String(pageZoom);
+    }
+    host.style.width = "";
+    host.style.minHeight = "";
+  }, [pageZoom]);
+
+  useEffect(() => {
+    syncEditorPageZoomLayout();
+    const scroll = scrollRef.current;
+    if (!scroll) return;
+
+    const ro = new ResizeObserver(() => syncEditorPageZoomLayout());
+    ro.observe(scroll);
+
+    const t0 = window.setTimeout(syncEditorPageZoomLayout, 0);
+    const t1 = window.setTimeout(syncEditorPageZoomLayout, 120);
+
+    return () => {
+      ro.disconnect();
+      window.clearTimeout(t0);
+      window.clearTimeout(t1);
+    };
+  }, [syncEditorPageZoomLayout, activePageId, sidePanelOpen]);
+
+  const handlePageZoomWheel = useCallback(
+    (e: React.WheelEvent<HTMLDivElement>) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -EDITOR_PAGE_ZOOM_STEP : EDITOR_PAGE_ZOOM_STEP;
+      applyPageZoom(pageZoom + delta);
+    },
+    [applyPageZoom, pageZoom],
+  );
 
   const pagesRef = useRef(pages);
   pagesRef.current = pages;
@@ -862,7 +920,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const runWritingReview = useCallback(async () => {
     const editor = activeEditor;
     if (!editor) return;
-    const text = getEditorPlainText(editor);
+    const { plain: text, blocks } = getWritingReviewPlainFromEditor(editor);
     setReviewOriginal(text);
     setReviewScannedLength(text.length);
     setReviewLoading(true);
@@ -894,7 +952,8 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         return;
       }
 
-      const revised = data.revisedText ?? text;
+      const revisedRaw = data.revisedText ?? text;
+      const revised = joinAlignedRevisedText(blocks, revisedRaw);
       setReviewRevised(revised);
       setReviewSummary(data.summary ?? "");
       setReviewProvider(data.provider ?? null);
@@ -1027,8 +1086,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           .filter((p) => p.kind === "content")
           .findIndex((p) => p.id === evalPage.id);
         evalSubtitle =
-          evalPage.title ??
-          extractFirstHeadingFromDoc(evalPage.content)?.text ??
+          getPageSubtitle(evalPage) ||
           getPageTocLabel(evalPage, idx >= 0 ? idx : 0);
       } else if (evalPage) {
         evalSubtitle = evalPage.title ?? "";
@@ -1120,9 +1178,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     : -1;
   const activePageTitleValue =
     activePage?.kind === "content"
-      ? (activePage.title ??
-          extractFirstHeadingFromDoc(activePage.content)?.text ??
-          "")
+      ? pageSubtitleInputValue(activePage)
       : (activePage?.title ?? "");
   const activePageTitlePlaceholder =
     activePage && activePage.kind !== "chapter-cover"
@@ -1132,23 +1188,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         )
       : "";
 
-  const pageSubtitleFor = useCallback(
-    (page: BookPage | undefined) => {
-      if (!page || page.kind === "chapter-cover") return "";
-      if (page.kind === "content") {
-        const idx = pages
-          .filter((p) => p.kind === "content")
-          .findIndex((p) => p.id === page.id);
-        return (
-          page.title ??
-          extractFirstHeadingFromDoc(page.content)?.text ??
-          getPageTocLabel(page, idx >= 0 ? idx : 0)
-        );
-      }
-      return page.title ?? "";
-    },
-    [pages],
-  );
+  const pageSubtitleFor = useCallback((page: BookPage | undefined) => {
+    if (!page || page.kind === "chapter-cover") return "";
+    if (page.kind === "content") return getPageSubtitle(page);
+    return page.title ?? "";
+  }, []);
 
   const toggleWritingReviewPanel = useCallback(() => {
     if (reviewOpen) {
@@ -1501,6 +1545,37 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
           >
             +명언
           </button>
+          <div
+            className="ml-1 flex items-center gap-0.5 rounded-md border border-stone-200/80 bg-white px-0.5 py-0.5"
+            title="페이지 화면 확대·축소 (Ctrl 또는 ⌘ + 스크롤)"
+          >
+            <button
+              type="button"
+              onClick={() => applyPageZoom(pageZoom - EDITOR_PAGE_ZOOM_STEP)}
+              disabled={pageZoom <= EDITOR_PAGE_ZOOM_MIN + 0.001}
+              className="rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-30"
+              aria-label="페이지 축소"
+            >
+              −
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPageZoom(EDITOR_PAGE_ZOOM_DEFAULT)}
+              className="min-w-[3rem] rounded px-1.5 py-1 text-[11px] tabular-nums text-stone-600 hover:bg-stone-50"
+              aria-label="확대 100%로 초기화"
+            >
+              {formatEditorPageZoomLabel(pageZoom)}
+            </button>
+            <button
+              type="button"
+              onClick={() => applyPageZoom(pageZoom + EDITOR_PAGE_ZOOM_STEP)}
+              disabled={pageZoom >= EDITOR_PAGE_ZOOM_MAX - 0.001}
+              className="rounded px-2 py-1 text-sm text-stone-600 hover:bg-stone-50 disabled:opacity-30"
+              aria-label="페이지 확대"
+            >
+              +
+            </button>
+          </div>
         </div>
         {activePage && activePage.kind !== "chapter-cover" && (
           <div className="flex items-center gap-2 border-t border-stone-100/80 px-3 py-2">
@@ -1537,8 +1612,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         <div
           ref={scrollRef}
           className="book-page-editor-scroll min-h-0 min-w-0 flex-1 overflow-y-auto"
+          onWheel={handlePageZoomWheel}
         >
-          <div ref={shellRef} className={bookPageShellClass}>
+          <div className="flex justify-center">
+            <div ref={zoomHostRef} className="book-page-zoom-host relative">
+              <div ref={shellRef} className={bookPageShellClass}>
             {activePage?.kind === "chapter-cover" ? (
             <article
               key={activePage.id}
@@ -1575,6 +1653,8 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
               }}
             />
             ) : null}
+              </div>
+            </div>
           </div>
         </div>
 

@@ -577,6 +577,16 @@ export function bookPageEditorShellCss() {
       background-color: #fafaf9;
       padding: 1.5rem;
     }
+    .book-page-editor-scroll .book-page-zoom-host {
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .book-page-editor-scroll .book-page-zoom-host .${bookPageShellClass} {
+      width: 100%;
+      max-width: ${BOOK_PAGE_REF_WIDTH};
+      margin-left: auto;
+      margin-right: auto;
+    }
     .book-page-editor-scroll .${bookPageClass} {
       box-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 6px 20px rgb(0 0 0 / 0.06);
       border-radius: 2px;
@@ -595,6 +605,17 @@ export function bookPageEditorShellCss() {
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .ProseMirror {
       min-height: calc(var(${BOOK_PAGE_HEIGHT_VAR}, 950px) - 5rem);
       outline: none;
+    }
+    .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .book-page-subtitle--editor-preview {
+      pointer-events: none;
+      user-select: none;
+      cursor: default;
+      text-align: center;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .book-page-subtitle--editor-preview + .book-page-prose .ProseMirror > p.book-body-p:first-child {
+      text-indent: 1em;
     }
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .ProseMirror > h2:first-child,
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .ProseMirror > h3:first-child {

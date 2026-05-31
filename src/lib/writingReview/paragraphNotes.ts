@@ -89,8 +89,8 @@ export function attachNotesToParagraphs(
     byLineIndex.set(note.index, note);
   }
 
-  return paragraphs.map((para, lineIndex) => {
-    const note = byLineIndex.get(lineIndex);
+  return paragraphs.map((para) => {
+    const note = byLineIndex.get(para.blockIndex);
     if (note) {
       return {
         ...para,

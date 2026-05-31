@@ -308,6 +308,28 @@ export function applyCorrectedPlainTextToEditor(
   return true;
 }
 
+function findTextblockInnerRange(
+  doc: ProseMirrorNode,
+  paragraphIndex: number,
+): { from: number; to: number; node: ProseMirrorNode } | null {
+  let lineIdx = 0;
+  let found: { from: number; to: number; node: ProseMirrorNode } | null = null;
+
+  doc.forEach((child, offset) => {
+    if (!child.isTextblock) return;
+    if (lineIdx === paragraphIndex) {
+      found = {
+        from: offset + 1,
+        to: offset + child.nodeSize - 1,
+        node: child,
+      };
+    }
+    lineIdx += 1;
+  });
+
+  return found;
+}
+
 /** plain text 문단 index(0-based, \\n 구분)만 다듬은 문단으로 교체 */
 export function applyParagraphAtIndex(
   editor: Editor,
@@ -315,39 +337,23 @@ export function applyParagraphAtIndex(
   newText: string,
 ): boolean {
   const serializers = getTextSerializersFromSchema(editor.schema);
-  const newContent: DocBlockJson[] = [];
-  let lineIdx = 0;
-  let changed = false;
+  const target = findTextblockInnerRange(editor.state.doc, paragraphIndex);
+  if (!target) return false;
 
-  editor.state.doc.forEach((child) => {
-    if (child.isTextblock) {
-      const current = getTextblockPlain(child, serializers);
-      const line = lineIdx === paragraphIndex ? newText : current;
-      if (lineIdx === paragraphIndex && current !== newText) changed = true;
-      newContent.push(textblockToJson(child, line));
-      lineIdx += 1;
-      return;
-    }
+  const current = getTextblockPlain(target.node, serializers);
+  if (current === newText) return false;
 
-    if (child.type.name === "image") {
-      newContent.push(child.toJSON() as DocBlockJson);
-      return;
+  const applied = editor.commands.command(({ tr, state, dispatch }) => {
+    if (!dispatch) return true;
+    if (newText.length === 0) {
+      tr.delete(target.from, target.to);
+    } else {
+      tr.replaceWith(target.from, target.to, state.schema.text(newText));
     }
-
-    if (child.type.name === "horizontalRule") {
-      newContent.push({ type: "horizontalRule" });
-    }
+    return true;
   });
 
-  if (!changed) return false;
-
-  editor
-    .chain()
-    .focus()
-    .setContent({ type: "doc", content: newContent }, { emitUpdate: true })
-    .run();
-
-  return true;
+  return applied;
 }
 
 export function shiftCorrectionsAfterApply(

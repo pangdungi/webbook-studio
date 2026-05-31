@@ -185,7 +185,7 @@ function proseContentCss(contentRoot: string, important = false) {
       color: #0c0a09${i};
       word-break: keep-all${i};
     }
-    ${r} h2 {
+    ${r} h2:not(.book-page-subtitle) {
       font-family: var(--wbs-font-h2, ${bookBodyFontFamily})${i};
       font-size: 1.2em${i};
       font-weight: 600${i};
@@ -196,7 +196,7 @@ function proseContentCss(contentRoot: string, important = false) {
       color: #1c1917${i};
       word-break: keep-all${i};
     }
-    ${r} h3 {
+    ${r} h3:not(.book-page-subtitle) {
       font-family: var(--wbs-font-h3, ${bookBodyFontFamily})${i};
       font-size: 1.05em${i};
       font-weight: 600${i};
@@ -382,11 +382,46 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
     : scrollImageCss;
 }
 
+/** 본문 페이지 부제목 — 편집기·리더·EPUB 공통 레이아웃 */
+export function bookPageSubtitleCss(scope = "", important = false) {
+  const p = scope ? `${scope} ` : "";
+  const i = important ? " !important" : "";
+
+  return `
+    ${p}.${bookPageClass}.${bookPageContentClass} .book-page-subtitle {
+      display: block${i};
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: 88%${i};
+      margin: 2.25em auto 1.35em${i};
+      padding: 0${i};
+      text-align: center${i};
+      text-indent: 0${i};
+      word-break: keep-all${i};
+      overflow-wrap: anywhere${i};
+    }
+    ${p}.${bookPageClass}.${bookPageContentClass} h2.book-page-subtitle {
+      font-size: 1.15em${i};
+      font-weight: 600${i};
+      line-height: 1.5${i};
+    }
+    ${p}.${bookPageClass}.${bookPageContentClass} h3.book-page-subtitle {
+      font-size: 1.05em${i};
+      font-weight: 600${i};
+      line-height: 1.55${i};
+    }
+    ${p}.${bookPageClass}.${bookPageContentClass} .book-page-subtitle + p.book-body-p {
+      text-indent: 1em${i};
+    }
+  `;
+}
+
 /** 편집기 — layout.tsx에서 주입 */
 export function bookEditorCss() {
   return `
     ${bookPageCanvasCss()}
     ${bookPageEditorShellCss()}
+    ${bookPageSubtitleCss()}
     .book-page-prose .ProseMirror {
       outline: none;
       min-height: 12rem;
@@ -526,31 +561,7 @@ function headingFontsExplicitCss(
     .${bookPageClass}.${bookPageContentClass} h3.book-page-subtitle {
       font-family: ${headingFontFamily(fonts.heading3)}${i};
     }
-    .${bookPageClass}.${bookPageContentClass} .book-page-subtitle {
-      display: block${i};
-      box-sizing: border-box${i};
-      width: 100%${i};
-      max-width: 88%${i};
-      margin: 2.25em auto 1.35em${i};
-      padding: 0${i};
-      text-align: center${i};
-      text-indent: 0${i};
-      word-break: keep-all${i};
-      overflow-wrap: anywhere${i};
-    }
-    .${bookPageClass}.${bookPageContentClass} h2.book-page-subtitle {
-      font-size: 1.15em${i};
-      font-weight: 600${i};
-      line-height: 1.5${i};
-    }
-    .${bookPageClass}.${bookPageContentClass} h3.book-page-subtitle {
-      font-size: 1.05em${i};
-      font-weight: 600${i};
-      line-height: 1.55${i};
-    }
-    .${bookPageClass}.${bookPageContentClass} .book-page-subtitle + p.book-body-p {
-      text-indent: 1em${i};
-    }
+    ${bookPageSubtitleCss("", important)}
   `;
 }
 

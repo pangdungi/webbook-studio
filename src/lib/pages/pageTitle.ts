@@ -35,6 +35,45 @@ function headingPlainText(node: Record<string, unknown>): string {
     .join("");
 }
 
+/** 본문 페이지 부제목 — 출판·목차용 (앞뒤 공백 제거) */
+export function getPageSubtitle(page: BookPage): string {
+  if (page.kind !== "content") return page.title?.trim() ?? "";
+  if (page.title?.trim()) return page.title.trim();
+  return extractFirstHeadingFromDoc(page.content)?.text.trim() ?? "";
+}
+
+/** 부제목 입력창 값 — trim 하지 않음 (띄어쓰기 입력 유지) */
+export function pageSubtitleInputValue(page: BookPage | undefined): string {
+  if (!page || page.kind !== "content") return page?.title ?? "";
+  if (typeof page.title === "string") return page.title;
+  return extractFirstHeadingFromDoc(page.content)?.text ?? "";
+}
+
+/** 편집기 페이지 미리보기 — 입력 중 공백 유지 */
+export function pageSubtitleEditorDisplay(page: BookPage): string {
+  return pageSubtitleInputValue(page);
+}
+
+/** EPUB·독자 미리보기 — 부제목(lead)과 본문 doc 분리 */
+export function splitPageContentLead(page: BookPage): {
+  lead: PageLeadHeading | null;
+  bodyDoc: Record<string, unknown>;
+} {
+  if (page.kind !== "content") {
+    return { lead: null, bodyDoc: page.content };
+  }
+
+  const subtitle = getPageSubtitle(page);
+  const docLead = extractFirstHeadingFromDoc(page.content);
+  const lead = subtitle
+    ? { level: (docLead?.level === 3 ? 3 : 2) as 2 | 3, text: subtitle }
+    : docLead;
+  const bodyDoc =
+    subtitle || docLead ? contentDocWithoutLead(page.content) : page.content;
+
+  return { lead, bodyDoc };
+}
+
 /** 목차·EPUB 제목 */
 export function getPageTocLabel(
   page: BookPage,

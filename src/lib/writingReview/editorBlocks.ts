@@ -1,7 +1,10 @@
 import { getTextSerializersFromSchema } from "@tiptap/core";
 import type { Editor } from "@tiptap/react";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { extractEditorPlainWithMap } from "@/lib/spellcheck/applyToEditor";
+import {
+  extractEditorPlainWithMap,
+  SPELLCHECK_BLOCK_SEPARATOR,
+} from "@/lib/spellcheck/applyToEditor";
 
 export type EditorBlockRole = "title" | "subtitle" | "body" | "other";
 
@@ -71,4 +74,15 @@ export function listEditorBlockLines(editor: Editor): EditorBlockLine[] {
   });
 
   return lines;
+}
+
+/** 글검사 API·문단 매칭 — listEditorBlockLines와 동일한 줄 단위 */
+export function getWritingReviewPlainFromEditor(editor: Editor): {
+  blocks: EditorBlockLine[];
+  plain: string;
+  lineCount: number;
+} {
+  const blocks = listEditorBlockLines(editor);
+  const plain = blocks.map((b) => b.text).join(SPELLCHECK_BLOCK_SEPARATOR);
+  return { blocks, plain, lineCount: blocks.length };
 }

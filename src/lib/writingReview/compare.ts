@@ -105,6 +105,25 @@ function alignBySimilarity(
   });
 }
 
+function countNonEmptyLines(lines: string[]): number {
+  return lines.filter((l) => l.trim()).length;
+}
+
+/** AI가 줄을 합쳤을 때 — 빈 블록은 유지, 내용 있는 블록에만 순서대로 대입 */
+function alignNonEmptyBlocksSequential(
+  blockTexts: string[],
+  revLines: string[],
+): string[] {
+  const revQueue = revLines.filter((l) => l.trim());
+  let r = 0;
+  return blockTexts.map((orig) => {
+    if (!orig.trim()) return orig;
+    const next = revQueue[r];
+    r += 1;
+    return next !== undefined ? next : orig;
+  });
+}
+
 function alignRevisedToBlocks(
   blocks: EditorBlockLine[],
   revisedPlain: string,
@@ -112,6 +131,9 @@ function alignRevisedToBlocks(
   const blockTexts = blocks.map((b) => b.text);
   const revLines = revisedPlain.split("\n");
   const countDiff = Math.abs(revLines.length - blockTexts.length);
+  const nonEmptyDiff = Math.abs(
+    countNonEmptyLines(blockTexts) - countNonEmptyLines(revLines),
+  );
 
   if (countDiff === 0) {
     return alignByIndex(blockTexts, revLines);
@@ -119,6 +141,10 @@ function alignRevisedToBlocks(
 
   if (countDiff <= COUNT_TOLERANCE) {
     return alignByIndex(blockTexts, revLines);
+  }
+
+  if (nonEmptyDiff <= COUNT_TOLERANCE) {
+    return alignNonEmptyBlocksSequential(blockTexts, revLines);
   }
 
   let aligned = alignBySimilarity(blockTexts, revLines);
@@ -223,9 +249,17 @@ export function buildReviewParagraphs(
   const blockCount = blocks.length;
   const revisedLineCount = revLines.length;
 
+  const nonEmptyBlocks = blocks.filter((b) => b.text.trim()).length;
+  const nonEmptyRevised = revLines.filter((l) => l.trim()).length;
+  const alignmentLooksOk =
+    changedCount >= Math.max(1, Math.min(nonEmptyBlocks, nonEmptyRevised) * 0.25);
+
   let warning: string | undefined;
-  if (Math.abs(blockCount - revisedLineCount) > COUNT_TOLERANCE) {
-    warning = `다듬은 글 줄 수(${revisedLineCount})와 본문 블록 수(${blockCount})가 달라 문단 매칭이 어긋날 수 있습니다. 글검사를 다시 실행해 보세요.`;
+  if (
+    Math.abs(blockCount - revisedLineCount) > COUNT_TOLERANCE &&
+    !alignmentLooksOk
+  ) {
+    warning = `다듬은 글 줄 수(${revisedLineCount})와 본문 블록 수(${blockCount})가 달라 문단 매칭이 어긋날 수 있습니다. 「검사를 다시하기」를 눌러 주세요.`;
   } else if (
     changedCount <= 1 &&
     normalizeCompareText(blocks.map((b) => b.text).join("\n")) !==
@@ -257,6 +291,14 @@ export function deriveReviewHighlights(
   }
 
   return issues.slice(0, MAX_HIGHLIGHTS);
+}
+
+/** AI revisedText를 편집기 블록 수에 맞게 재조합 (줄 수 불일치 보정) */
+export function joinAlignedRevisedText(
+  blocks: EditorBlockLine[],
+  revisedPlain: string,
+): string {
+  return alignRevisedToBlocks(blocks, revisedPlain).join("\n");
 }
 
 export function buildReviewParagraphsFromPlain(
