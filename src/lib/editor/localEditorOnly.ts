@@ -12,7 +12,17 @@ export function getLocalEditorBaseUrl(): string {
     /\/$/,
     "",
   );
-  return fromEnv || "http://localhost:3000";
+  if (fromEnv) {
+    try {
+      const host = new URL(
+        fromEnv.startsWith("http") ? fromEnv : `http://${fromEnv}`,
+      ).hostname;
+      if (isLocalDevHostname(host)) return fromEnv;
+    } catch {
+      /* ignore */
+    }
+  }
+  return "http://localhost:3000";
 }
 
 export function localEditorUrl(path: string): string {
@@ -40,6 +50,13 @@ export function isEditorMutationApiPath(
   if (/^\/api\/books\/[^/]+\/chapters$/.test(pathname)) return true;
   if (/^\/api\/books\/[^/]+\/versions/.test(pathname)) return true;
   if (/^\/api\/chapters\/[^/]+$/.test(pathname)) return true;
+  /* 배포(웹)에서는 출판만 허용 */
+  if (
+    /^\/api\/publish\/[^/]+$/.test(pathname) &&
+    method.toUpperCase() === "POST"
+  ) {
+    return false;
+  }
   if (/^\/api\/publish\/[^/]+$/.test(pathname)) return true;
   if (pathname === "/api/upload") return true;
   if (pathname === "/api/spellcheck") return true;

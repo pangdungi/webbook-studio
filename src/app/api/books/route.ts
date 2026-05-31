@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blockNonLocalEditorMutation } from "@/lib/editor/requireLocalEditor";
 import {
   ensurePrimaryReaderToken,
   primaryReaderUrlsByBookId,
@@ -42,6 +43,9 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
+  const blocked = blockNonLocalEditorMutation(request);
+  if (blocked) return blocked;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

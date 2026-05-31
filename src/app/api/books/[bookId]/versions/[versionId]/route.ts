@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blockNonLocalEditorMutation } from "@/lib/editor/requireLocalEditor";
 import type { BookVersionSnapshot } from "@/lib/books/bookVersionSnapshot";
 import { applyBookVersionSnapshot } from "@/lib/books/applyBookVersionSnapshot";
 import { requireAdmin } from "@/lib/supabase/admin";
@@ -42,7 +43,10 @@ export async function GET(_request: Request, context: RouteContext) {
   return NextResponse.json({ version: data });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
+  const blocked = blockNonLocalEditorMutation(request);
+  if (blocked) return blocked;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

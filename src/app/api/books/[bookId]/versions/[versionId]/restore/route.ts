@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { blockNonLocalEditorMutation } from "@/lib/editor/requireLocalEditor";
 import type { BookVersionSnapshot } from "@/lib/books/bookVersionSnapshot";
 import { applyBookVersionSnapshot } from "@/lib/books/applyBookVersionSnapshot";
 import { requireAdmin } from "@/lib/supabase/admin";
@@ -8,7 +9,10 @@ type RouteContext = {
   params: Promise<{ bookId: string; versionId: string }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
+export async function POST(request: Request, context: RouteContext) {
+  const blocked = blockNonLocalEditorMutation(request);
+  if (blocked) return blocked;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

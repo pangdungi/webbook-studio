@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { blockNonLocalEditorMutation } from "@/lib/editor/requireLocalEditor";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ chapterId: string }> };
 
 export async function PATCH(request: Request, context: RouteContext) {
+  const blocked = blockNonLocalEditorMutation(request);
+  if (blocked) return blocked;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -85,7 +89,10 @@ export async function PATCH(request: Request, context: RouteContext) {
   return NextResponse.json({ chapter });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
+export async function DELETE(request: Request, context: RouteContext) {
+  const blocked = blockNonLocalEditorMutation(request);
+  if (blocked) return blocked;
+
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { notFound, redirect } from "next/navigation";
 import { EditorWorkspace } from "@/components/editor/EditorWorkspace";
+import { LocalEditorGate } from "@/components/editor/LocalEditorGate";
 import { isLocalDevHostname } from "@/lib/editor/localEditorOnly";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
@@ -38,15 +39,17 @@ export default async function EditBookPage({ params }: PageProps) {
     .order("sort_order", { ascending: true });
 
   return (
-    <EditorWorkspace
-      bookId={id}
-      initialBook={{
-        ...book,
-        ...normalizeBookCoverStyle(book),
-        heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
-        ...normalizeBookReaderFields(book),
-      }}
-      initialChapters={chapters ?? []}
-    />
+    <LocalEditorGate bookId={id}>
+      <EditorWorkspace
+        bookId={id}
+        initialBook={{
+          ...book,
+          ...normalizeBookCoverStyle(book),
+          heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+          ...normalizeBookReaderFields(book),
+        }}
+        initialChapters={chapters ?? []}
+      />
+    </LocalEditorGate>
   );
 }

@@ -96,8 +96,9 @@ export function BookDashboard() {
     <div>
       {!onLocal ? (
         <div className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-          <strong>편집·저장·출판은 로컬만.</strong> 이 배포 사이트에서는 책 목록·독자
-          링크·미리보기만 하세요. 글 작업은{" "}
+          <strong>이 사이트에서는 편집 버튼이 없습니다.</strong> 출판·링크·미리보기·버전
+          보기만 하세요. 글 수정은 PC에서{" "}
+          <code className="rounded bg-amber-100/80 px-1">npm run dev</code> 후{" "}
           <a
             href={localEditorUrl("/")}
             className="font-medium underline"
@@ -106,8 +107,7 @@ export function BookDashboard() {
           >
             {localEditorUrl("/")}
           </a>
-          에서 <code className="rounded bg-amber-100/80 px-1">npm run dev</code> 후
-          편집하세요.
+          에서 하세요.
         </div>
       ) : null}
       <div className="mb-8 flex items-center justify-between">
@@ -246,12 +246,14 @@ export function BookDashboard() {
                 ) : null}
 
                 <div className="mt-auto flex flex-wrap gap-2">
-                  <a
-                    href={localEditorUrl(`/admin/books/${book.id}/edit`)}
-                    className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
-                  >
-                    편집 (로컬)
-                  </a>
+                  {onLocal ? (
+                    <a
+                      href={`/admin/books/${book.id}/edit`}
+                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
+                    >
+                      편집
+                    </a>
+                  ) : null}
                   <a
                     href={`/admin/books/${book.id}/versions`}
                     className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-1.5 text-xs font-medium text-sky-950 hover:bg-sky-100"
