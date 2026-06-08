@@ -28,6 +28,7 @@ export function ReaderPageClient({
         headingFonts={headingFonts}
         protectContent
         progressStorageKey={token}
+        defaultViewMode="scroll"
       />
     </div>
   );

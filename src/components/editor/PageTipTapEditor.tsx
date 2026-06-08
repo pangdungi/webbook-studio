@@ -6,19 +6,26 @@ import { useLayoutEffect } from "react";
 
 type Props = {
   pageId: string;
+  bookId: string;
   initialContent: Record<string, unknown>;
   onUpdate: (pageId: string, json: Record<string, unknown>) => void;
   registerEditor: (pageId: string, editor: Editor | null) => void;
+  onImageUploadError?: (message: string) => void;
 };
 
 export function PageTipTapEditor({
   pageId,
+  bookId,
   initialContent,
   onUpdate,
   registerEditor,
+  onImageUploadError,
 }: Props) {
   const editor = useEditor({
-    extensions: createBookEditorExtensions(),
+    extensions: createBookEditorExtensions({
+      bookId,
+      onImageUploadError,
+    }),
     content: initialContent,
     immediatelyRender: false,
     enableInputRules: false,

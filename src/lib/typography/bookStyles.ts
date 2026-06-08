@@ -481,6 +481,11 @@ export function bookEditorCss() {
       margin-left: auto;
       margin-right: 0;
     }
+    .book-page-prose .ProseMirror.book-editor-drag-over {
+      outline: 2px dashed #a8a29e;
+      outline-offset: 4px;
+      background: rgba(250, 250, 249, 0.85);
+    }
   `;
 }
 

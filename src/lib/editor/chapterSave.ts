@@ -35,7 +35,7 @@ export async function parseChapterPatchResponse(
   ) {
     throw new ChapterSaveConflictError(
       data.error ??
-        "다른 탭·다른 주소(로컬/배포)에서 더 최근에 저장된 내용이 있습니다.",
+        "서버에 더 새로운 저장이 있어 이 내용을 올리지 못했습니다.",
       data.chapter,
     );
   }
@@ -61,4 +61,56 @@ export function serverChapterIsNewer(
   const baseMs = Date.parse(baselineUpdatedAt);
   if (Number.isNaN(serverMs) || Number.isNaN(baseMs)) return false;
   return serverMs > baseMs + 500;
+}
+
+export function chapterSavePayloadKey(parts: {
+  contentJson: Record<string, unknown>;
+  contentHtml: string;
+  title?: string;
+}): string {
+  return `${parts.title ?? ""}\0${parts.contentHtml}\0${JSON.stringify(parts.contentJson)}`;
+}
+
+/** 서버에 이미 같은 내용이 올라간 경우(자동저장 겹침) */
+export function chapterMatchesSavePayload(
+  chapter: Chapter,
+  payload: {
+    contentJson: Record<string, unknown>;
+    contentHtml: string;
+    title?: string;
+  },
+): boolean {
+  const json = chapter.content_json as Record<string, unknown> | null;
+  return (
+    chapterSavePayloadKey({
+      contentJson: json ?? {},
+      contentHtml: chapter.content_html ?? "",
+      title: chapter.title,
+    }) === chapterSavePayloadKey(payload)
+  );
+}
+
+export function chapterBaselinesMatch(
+  serverUpdatedAt: string,
+  clientUpdatedAt: string,
+): boolean {
+  const serverMs = Date.parse(serverUpdatedAt);
+  const clientMs = Date.parse(clientUpdatedAt);
+  if (Number.isNaN(serverMs) || Number.isNaN(clientMs)) {
+    return serverUpdatedAt === clientUpdatedAt;
+  }
+  return Math.abs(serverMs - clientMs) < 2000;
+}
+
+/** 배포·다른 PC 등 진짜 외부 충돌 — 짧은 간격은 같은 탭 자동저장 겹침 */
+export function isExternalChapterConflict(
+  serverUpdatedAt: string,
+  clientUpdatedAt: string,
+): boolean {
+  if (chapterBaselinesMatch(serverUpdatedAt, clientUpdatedAt)) return false;
+  const serverMs = Date.parse(serverUpdatedAt);
+  const clientMs = Date.parse(clientUpdatedAt);
+  if (Number.isNaN(serverMs) || Number.isNaN(clientMs)) return true;
+  if (serverMs <= clientMs) return false;
+  return serverMs - clientMs > 60_000;
 }

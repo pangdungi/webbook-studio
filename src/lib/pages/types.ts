@@ -12,6 +12,10 @@ export type BookPage = {
   content: Record<string, unknown>;
   /** EPUB·미리보기용 HTML (페이지 캔버스 안) */
   content_html: string;
+  /** 편집기 전용 — 작성·검수 완료 표시 (출판·리더 무시) */
+  editor_done?: boolean;
+  /** 편집기 전용 — 페이지 메모 (출판·리더 무시) */
+  editor_memo?: string;
 };
 
 export type ChapterContentV2 = {

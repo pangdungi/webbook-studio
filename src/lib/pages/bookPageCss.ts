@@ -651,6 +651,32 @@ export function bookPageEditorShellCss() {
     .book-page--quote textarea.book-quote-source {
       min-height: 1.5em;
     }
+    .book-page-editor-scroll .book-page-shell .book-page--cover {
+      align-self: stretch;
+      width: 100%;
+    }
+    .book-page-editor-scroll .book-page--cover .${bookPageBodyClass} {
+      width: 100%;
+      text-align: left;
+    }
+    .book-page-editor-scroll .book-page--cover h1.${bookChapterTitleClass} {
+      display: inline-block !important;
+      box-sizing: border-box !important;
+      width: fit-content !important;
+      max-width: 100% !important;
+      margin: 0 !important;
+      padding: 1.1em 1.75em !important;
+      border: 2px solid #1c1917 !important;
+      font-size: 1.55em !important;
+      font-weight: 700 !important;
+      line-height: 1.45 !important;
+      text-align: left !important;
+      white-space: pre-line !important;
+      overflow-wrap: anywhere !important;
+      word-break: keep-all !important;
+      color: #0c0a09 !important;
+      outline: none;
+    }
   `;
 }
 

@@ -106,10 +106,11 @@ export function BookVersionsPageClient({
             }
             bookCoverActive={false}
             onSelectBookCover={() => {}}
-            onSelect={setActiveChapterId}
+            onOpenChapter={setActiveChapterId}
             onSelectPage={() => {}}
+            onTogglePageDone={() => {}}
+            onPageMemoChange={() => {}}
             onAdd={() => {}}
-            onRename={async () => {}}
             onDelete={() => {}}
             onReorder={() => {}}
             onPageDragEnd={() => {}}

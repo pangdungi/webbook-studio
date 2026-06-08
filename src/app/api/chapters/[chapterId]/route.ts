@@ -5,6 +5,39 @@ import { createClient } from "@/lib/supabase/server";
 
 type RouteContext = { params: Promise<{ chapterId: string }> };
 
+type ChapterRow = {
+  books: { created_by: string };
+  [key: string]: unknown;
+};
+
+export async function GET(_request: Request, context: RouteContext) {
+  const admin = await requireAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  const { chapterId } = await context.params;
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("chapters")
+    .select("*, books!inner(created_by)")
+    .eq("id", chapterId)
+    .single();
+
+  if (error || !data) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  const bookMeta = (data as unknown as ChapterRow).books;
+  if (bookMeta.created_by !== admin.id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const { books: _, ...chapter } = data as unknown as ChapterRow;
+  return NextResponse.json({ chapter });
+}
+
 export async function PATCH(request: Request, context: RouteContext) {
   const blocked = blockNonLocalEditorMutation(request);
   if (blocked) return blocked;
@@ -28,64 +61,27 @@ export async function PATCH(request: Request, context: RouteContext) {
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
-  const ifUpdatedAt =
-    typeof body.if_updated_at === "string" ? body.if_updated_at : null;
-
-  let updateQuery = supabase
+  const { data, error } = await supabase
     .from("chapters")
     .update(updates)
-    .eq("id", chapterId);
-
-  if (ifUpdatedAt) {
-    updateQuery = updateQuery.eq("updated_at", ifUpdatedAt);
-  }
-
-  const { data, error } = await updateQuery
+    .eq("id", chapterId)
     .select("*, books!inner(created_by)")
-    .maybeSingle();
+    .single();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
   if (!data) {
-    if (!ifUpdatedAt) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const { data: current, error: readError } = await supabase
-      .from("chapters")
-      .select("*, books!inner(created_by)")
-      .eq("id", chapterId)
-      .single();
-
-    if (readError || !current) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    const bookMetaCurrent = current.books as unknown as { created_by: string };
-    if (bookMetaCurrent.created_by !== admin.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
-
-    const { books: _books, ...chapter } = current;
-    return NextResponse.json(
-      {
-        error:
-          "다른 탭·다른 주소(로컬/배포)에서 더 최근에 저장된 내용이 있습니다. 이 화면을 서버에 올리지 않았습니다.",
-        code: "STALE_CHAPTER",
-        chapter,
-      },
-      { status: 409 },
-    );
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const bookMeta = data.books as unknown as { created_by: string };
+  const bookMeta = (data as unknown as ChapterRow).books;
   if (bookMeta.created_by !== admin.id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
-  const { books: _, ...chapter } = data;
+  const { books: _, ...chapter } = data as unknown as ChapterRow;
   return NextResponse.json({ chapter });
 }
 

@@ -2,12 +2,20 @@ export type ReaderViewMode = "scroll" | "paginated";
 
 export const READER_VIEW_MODE_KEY = "wbs_reader_view_mode";
 
-export function loadReaderViewMode(): ReaderViewMode {
-  if (typeof window === "undefined") return "scroll";
-  const raw = localStorage.getItem(READER_VIEW_MODE_KEY);
+function viewModeStorageKey(scopeKey?: string) {
+  return scopeKey ? `${READER_VIEW_MODE_KEY}:${scopeKey}` : READER_VIEW_MODE_KEY;
+}
+
+export function loadReaderViewMode(
+  scopeKey?: string,
+  defaultMode: ReaderViewMode = "scroll",
+): ReaderViewMode {
+  if (typeof window === "undefined") return defaultMode;
+  const raw = localStorage.getItem(viewModeStorageKey(scopeKey));
+  if (raw === null) return defaultMode;
   return raw === "paginated" ? "paginated" : "scroll";
 }
 
-export function saveReaderViewMode(mode: ReaderViewMode) {
-  localStorage.setItem(READER_VIEW_MODE_KEY, mode);
+export function saveReaderViewMode(mode: ReaderViewMode, scopeKey?: string) {
+  localStorage.setItem(viewModeStorageKey(scopeKey), mode);
 }

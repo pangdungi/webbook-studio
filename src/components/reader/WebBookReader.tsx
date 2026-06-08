@@ -34,8 +34,10 @@ type Props = {
   headingFonts?: BookHeadingFonts;
   embedded?: boolean;
   protectContent?: boolean;
-  /** 있으면 localStorage에 읽던 위치 저장·복원 */
+  /** 있으면 localStorage에 읽던 위치·보기 모드 저장·복원 */
   progressStorageKey?: string;
+  /** progressStorageKey별 첫 방문 기본 보기 (발행 이북: scroll) */
+  defaultViewMode?: ReaderViewMode;
 };
 
 export function WebBookReader({
@@ -46,6 +48,7 @@ export function WebBookReader({
   embedded = false,
   protectContent = false,
   progressStorageKey,
+  defaultViewMode = "scroll",
 }: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
   const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
@@ -63,13 +66,13 @@ export function WebBookReader({
   }, [title, embedded]);
 
   useEffect(() => {
-    setViewMode(loadReaderViewMode());
+    setViewMode(loadReaderViewMode(progressStorageKey, defaultViewMode));
     setFontScale(loadReaderFontScale());
-  }, []);
+  }, [defaultViewMode, progressStorageKey]);
 
   const changeViewMode = (mode: ReaderViewMode) => {
     setViewMode(mode);
-    saveReaderViewMode(mode);
+    saveReaderViewMode(mode, progressStorageKey);
   };
 
   const changeFontScale = (scale: ReaderFontScale) => {

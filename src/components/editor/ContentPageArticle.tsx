@@ -16,16 +16,20 @@ import { PageTipTapEditor } from "./PageTipTapEditor";
 
 type Props = {
   page: BookPage;
+  bookId: string;
   onUpdate: (pageId: string, json: Record<string, unknown>) => void;
   registerEditor: (pageId: string, editor: Editor | null) => void;
   pageRef: RefCallback<HTMLElement>;
+  onImageUploadError?: (message: string) => void;
 };
 
 export const ContentPageArticle = memo(function ContentPageArticle({
   page,
+  bookId,
   onUpdate,
   registerEditor,
   pageRef,
+  onImageUploadError,
 }: Props) {
   const subtitle = pageSubtitleEditorDisplay(page);
 
@@ -46,9 +50,11 @@ export const ContentPageArticle = memo(function ContentPageArticle({
         <PageTipTapEditor
           key={page.id}
           pageId={page.id}
+          bookId={bookId}
           initialContent={contentDocWithoutLead(page.content)}
           onUpdate={onUpdate}
           registerEditor={registerEditor}
+          onImageUploadError={onImageUploadError}
         />
       </div>
     </article>

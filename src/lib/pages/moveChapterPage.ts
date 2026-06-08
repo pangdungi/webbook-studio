@@ -12,6 +12,9 @@ export const pageDragId = (chapterId: string, pageId: string) =>
 
 export const chapterDragId = (chapterId: string) => `chapter:${chapterId}`;
 
+export const chapterDropZoneId = (chapterId: string) =>
+  `chapter-drop:${chapterId}`;
+
 export function parsePageDragId(
   id: string | number,
 ): { chapterId: string; pageId: string } | null {
@@ -25,7 +28,24 @@ export function parsePageDragId(
 
 export function parseChapterDragId(id: string | number): string | null {
   const s = String(id);
-  return s.startsWith("chapter:") ? s.slice(8) : null;
+  if (!s.startsWith("chapter:") || s.startsWith("chapter-drop:")) return null;
+  return s.slice(8);
+}
+
+export function parseChapterDropZoneId(id: string | number): string | null {
+  const s = String(id);
+  return s.startsWith("chapter-drop:") ? s.slice(13) : null;
+}
+
+export function resolveSidebarOverChapterId(
+  overId: string | number,
+): string | null {
+  return (
+    parseChapterDragId(overId) ??
+    parseChapterDropZoneId(overId) ??
+    parsePageDragId(overId)?.chapterId ??
+    null
+  );
 }
 
 export function chapterMovablePages(pages: BookPage[]): BookPage[] {
@@ -124,6 +144,7 @@ export function movePageByDrag(
   chapters: Chapter[],
   activePageId: string,
   overId: string | number,
+  insertPosition: "before" | "after" = "before",
 ): { chapters: Chapter[] } | { error: string } {
   const flat = buildFlatPageList(chapters);
   const fromIdx = flat.findIndex((f) => f.pageId === activePageId);
@@ -132,8 +153,9 @@ export function movePageByDrag(
   const [moved] = flat.splice(fromIdx, 1);
   const fromChapterId = moved.chapterId;
 
-  const overChapterId = parseChapterDragId(overId);
   const overPage = parsePageDragId(overId);
+  const overChapterId =
+    parseChapterDragId(overId) ?? parseChapterDropZoneId(overId);
 
   let toChapterId: string;
   let toIdx: number;
@@ -142,13 +164,29 @@ export function movePageByDrag(
     toChapterId = overPage.chapterId;
     toIdx = flat.findIndex((f) => f.pageId === overPage.pageId);
     if (toIdx < 0) toIdx = flat.length;
+    else if (insertPosition === "after") toIdx += 1;
   } else if (overChapterId) {
     toChapterId = overChapterId;
-    toIdx = insertIndexForChapter(
-      flat,
-      chapters.map((c) => c.id),
-      toChapterId,
-    );
+    if (insertPosition === "before") {
+      toIdx = insertIndexForChapter(
+        flat,
+        chapters.map((c) => c.id),
+        toChapterId,
+      );
+    } else {
+      let lastIdx = -1;
+      for (let i = flat.length - 1; i >= 0; i -= 1) {
+        if (flat[i].chapterId === toChapterId) {
+          lastIdx = i;
+          break;
+        }
+      }
+      toIdx = lastIdx >= 0 ? lastIdx + 1 : insertIndexForChapter(
+        flat,
+        chapters.map((c) => c.id),
+        toChapterId,
+      );
+    }
   } else {
     return { error: "이동할 위치를 찾을 수 없습니다." };
   }
