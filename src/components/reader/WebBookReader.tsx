@@ -50,8 +50,12 @@ export function WebBookReader({
   progressStorageKey,
   defaultViewMode = "scroll",
 }: Props) {
-  const [viewMode, setViewMode] = useState<ReaderViewMode>("scroll");
-  const [fontScale, setFontScale] = useState<ReaderFontScale>("normal");
+  const [viewMode, setViewMode] = useState<ReaderViewMode>(() =>
+    loadReaderViewMode(progressStorageKey, defaultViewMode),
+  );
+  const [fontScale, setFontScale] = useState<ReaderFontScale>(() =>
+    loadReaderFontScale(),
+  );
   const [chromeOpen, setChromeOpen] = useState(false);
   const [tocOpen, setTocOpen] = useState(false);
   const readerNavRef = useRef<HtmlScrollReaderHandle | null>(null);

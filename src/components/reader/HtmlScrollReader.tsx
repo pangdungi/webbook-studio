@@ -139,6 +139,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
     const persistProgress = useCallback(() => {
       if (!progressStorageKey) return;
+      if (!paginated && !scrollLayoutReadyRef.current) return;
       const viewport = viewportRef.current;
       const surface = surfaceRef.current;
       if (!viewport || !surface) return;
@@ -198,8 +199,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           typeof saved.absoluteScrollTop === "number" &&
           saved.absoluteScrollTop > 0
         ) {
-          viewport.scrollTop = saved.absoluteScrollTop;
-          lastKnownScrollTopRef.current = viewport.scrollTop;
+          pinScrollTop(saved.absoluteScrollTop);
           return;
         }
 
@@ -208,8 +208,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           document.getElementById(saved.anchorId);
 
         if (anchor) {
-          viewport.scrollTop = anchor.offsetTop + (saved.scrollTop ?? 0);
-          lastKnownScrollTopRef.current = viewport.scrollTop;
+          pinScrollTop(anchor.offsetTop + (saved.scrollTop ?? 0));
           return;
         }
 
@@ -219,10 +218,9 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
           el.getBoundingClientRect().top -
           viewport.getBoundingClientRect().top +
           viewport.scrollTop;
-        viewport.scrollTop = top + (saved.scrollTop ?? 0);
-        lastKnownScrollTopRef.current = viewport.scrollTop;
+        pinScrollTop(top + (saved.scrollTop ?? 0));
       },
-      [],
+      [pinScrollTop],
     );
 
     const applyPaginatedSlide = useCallback(
@@ -328,9 +326,11 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
       if (progressStorageKey && !restoredOnceRef.current) {
         const saved = loadReadingProgress(progressStorageKey);
-        if (saved) {
+        if (saved?.viewMode === "paginated") {
           const slides = getSlides(surface);
           pageIndexRef.current = resolveSlideIndex(slides, saved);
+        } else {
+          pageIndexRef.current = 0;
         }
         restoredOnceRef.current = true;
       }
@@ -394,14 +394,27 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         : lastKnownScrollTopRef.current;
 
       const finishScrollLayout = () => {
+        let targetTop = 0;
+
         if (progressStorageKey && !restoredOnceRef.current) {
           const saved = loadReadingProgress(progressStorageKey);
           restoredOnceRef.current = true;
-          if (saved) restoreScrollProgress(saved);
+          if (saved?.viewMode === viewMode) {
+            restoreScrollProgress(saved);
+            targetTop = viewport.scrollTop;
+          } else {
+            pinScrollTop(0);
+            targetTop = 0;
+          }
         } else if (pinnedTop > 0) {
-          viewport.scrollTop = pinnedTop;
+          pinScrollTop(pinnedTop);
+          targetTop = pinnedTop;
+        } else {
+          pinScrollTop(0);
+          targetTop = 0;
         }
-        lastKnownScrollTopRef.current = viewport.scrollTop;
+
+        lastKnownScrollTopRef.current = targetTop;
         if (lockedScrollVhRef.current <= 0) {
           lockedScrollVhRef.current = Math.max(viewport.clientHeight, 1);
         }
@@ -414,8 +427,10 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       applyPaginatedSlide,
       runPaginatedLayout,
       progressStorageKey,
+      pinScrollTop,
       restoreScrollProgress,
       syncScrollViewportVars,
+      viewMode,
     ]);
 
     const scrollToAnchor = useCallback(
@@ -590,6 +605,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       if (!viewport) return;
 
       const onScroll = () => {
+        if (!scrollLayoutReadyRef.current) return;
         lastKnownScrollTopRef.current = viewport.scrollTop;
         schedulePersistProgress();
       };
