@@ -16,7 +16,14 @@ export default async function ReadPage({ params }: PageProps) {
     );
   }
 
-  const book = record.books;
+  const book = record.books as {
+    title: string;
+    status: string;
+    epub_storage_path: string | null;
+    writing_mode: string;
+    heading_fonts?: unknown;
+    cover_path?: string | null;
+  };
   if (book.status !== "published" || !book.epub_storage_path) {
     return (
       <ReaderAccessDenied message="아직 출판되지 않은 책이거나 파일을 찾을 수 없습니다." />
@@ -29,6 +36,7 @@ export default async function ReadPage({ params }: PageProps) {
       title={book.title}
       writingMode={book.writing_mode as WritingMode}
       headingFonts={normalizeBookHeadingFonts(book.heading_fonts)}
+      scrollCoverKey={book.cover_path ?? null}
     />
   );
 }

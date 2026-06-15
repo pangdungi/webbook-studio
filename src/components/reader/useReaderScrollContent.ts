@@ -13,7 +13,10 @@ type ScrollPayload = {
   toc: ReaderTocEntry[];
 };
 
-export function useReaderScrollContent(scrollUrl: string | null) {
+export function useReaderScrollContent(
+  scrollUrl: string | null,
+  coverKey?: string | null,
+) {
   const [content, setContent] = useState<ScrollPayload | null>(null);
   const [loading, setLoading] = useState(Boolean(scrollUrl));
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,8 @@ export function useReaderScrollContent(scrollUrl: string | null) {
     const base = scrollUrl.startsWith("http")
       ? scrollUrl
       : `${window.location.origin}${scrollUrl}`;
-    const absolute = `${base}${base.includes("?") ? "&" : "?"}v=${READER_SCROLL_DOC_VERSION}`;
+    const coverParam = encodeURIComponent(coverKey ?? "");
+    const absolute = `${base}${base.includes("?") ? "&" : "?"}v=${READER_SCROLL_DOC_VERSION}&cover=${coverParam}`;
 
     fetch(absolute, { credentials: "include", cache: "no-store" })
       .then(async (res) => {
@@ -59,7 +63,7 @@ export function useReaderScrollContent(scrollUrl: string | null) {
     return () => {
       cancelled = true;
     };
-  }, [scrollUrl]);
+  }, [scrollUrl, coverKey]);
 
   return { content, loading, error };
 }

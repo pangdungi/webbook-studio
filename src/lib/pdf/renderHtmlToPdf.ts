@@ -35,14 +35,21 @@ export async function renderHtmlToPdf(html: string): Promise<Buffer> {
       timeout: PDF_RENDER_TIMEOUT_MS,
     });
     await waitForFonts(page);
-    const bytes = await page.pdf({
-      format: "A4",
-      printBackground: true,
-      preferCSSPageSize: true,
-      scale: 1,
-      margin: { top: 0, right: 0, bottom: 0, left: 0 },
-      timeout: PDF_RENDER_TIMEOUT_MS,
-    });
+    const bytes = await Promise.race([
+      page.pdf({
+        format: "A4",
+        printBackground: true,
+        preferCSSPageSize: true,
+        scale: 1,
+        margin: { top: 0, right: 0, bottom: 0, left: 0 },
+      }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("PDF 렌더 시간 초과")),
+          PDF_RENDER_TIMEOUT_MS,
+        ),
+      ),
+    ]);
     return Buffer.from(bytes);
   } finally {
     await browser.close();

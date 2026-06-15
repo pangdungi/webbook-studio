@@ -10,6 +10,7 @@ type Props = {
   title: string;
   writingMode: WritingMode;
   headingFonts: BookHeadingFonts;
+  scrollCoverKey?: string | null;
 };
 
 /** 서버에서 책 정보 검증 후 렌더 — 별도 /api/read 호출 없음 */
@@ -18,6 +19,7 @@ export function ReaderPageClient({
   title,
   writingMode,
   headingFonts,
+  scrollCoverKey = null,
 }: Props) {
   return (
     <div className="h-full min-h-0">
@@ -26,6 +28,7 @@ export function ReaderPageClient({
         title={title}
         writingMode={writingMode}
         headingFonts={headingFonts}
+        scrollCoverKey={scrollCoverKey}
         protectContent
         progressStorageKey={token}
         defaultViewMode="scroll"

@@ -1244,7 +1244,7 @@ export function EditorWorkspace({
         return;
       }
 
-      setBook(data.book);
+      if (data.book) setBook(data.book);
       const title = (data.book?.title ?? book.title).trim() || "제목 없음";
       const pdfLine = data.pdfReady
         ? "PDF도 생성되었습니다. 상단 「PDF 받기」로 내려받을 수 있습니다."

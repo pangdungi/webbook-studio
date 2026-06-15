@@ -124,7 +124,7 @@ function pageBoxCss(p: string, important = false) {
       word-break: keep-all${i};
     }
     ${quotePageCss(p, i)}
-    ${bookCoverImagePageCss(p, i)}
+    ${bookCoverImagePageCss(p, important)}
   `;
 }
 
@@ -239,7 +239,7 @@ export function bookPageScrollSplashPageCss(scope: string, important = false) {
       word-break: keep-all${i};
     }
     ${quotePageCss(p, i)}
-    ${bookCoverImagePageCss(p, i)}
+    ${bookCoverImagePageCss(p, important)}
     ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
       height: auto${i};
       min-height: 0${i};

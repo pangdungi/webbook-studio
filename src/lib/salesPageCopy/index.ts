@@ -13,7 +13,7 @@ import type { SalesPageCopyResult } from "@/lib/salesPageCopy/types";
 import {
   salesPageAnthropicModel,
   salesPageOpenAiModel,
-      6144,
+  SALES_PAGE_DIGEST_MAX_TOKENS,
   SALES_PAGE_FINAL_MAX_TOKENS,
   type SalesPageLlmPhase,
 } from "@/lib/salesPageCopy/models";

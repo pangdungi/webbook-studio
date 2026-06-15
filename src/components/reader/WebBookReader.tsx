@@ -38,6 +38,8 @@ type Props = {
   progressStorageKey?: string;
   /** progressStorageKey별 첫 방문 기본 보기 (발행 이북: scroll) */
   defaultViewMode?: ReaderViewMode;
+  /** 표지 storage 경로 — 변경 시 스크롤 HTML 캐시 무효화 */
+  scrollCoverKey?: string | null;
 };
 
 export function WebBookReader({
@@ -49,6 +51,7 @@ export function WebBookReader({
   protectContent = false,
   progressStorageKey,
   defaultViewMode = "scroll",
+  scrollCoverKey = null,
 }: Props) {
   const [viewMode, setViewMode] = useState<ReaderViewMode>(() =>
     loadReaderViewMode(progressStorageKey, defaultViewMode),
@@ -63,7 +66,10 @@ export function WebBookReader({
   const scrollPinOnChromeRef = useRef<number | null>(null);
 
   const scrollUrl = scrollUrlFromEpubUrl(epubUrl);
-  const { content, loading, error } = useReaderScrollContent(scrollUrl);
+  const { content, loading, error } = useReaderScrollContent(
+    scrollUrl,
+    scrollCoverKey,
+  );
 
   useEffect(() => {
     if (!embedded) document.title = title;
