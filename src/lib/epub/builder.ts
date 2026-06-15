@@ -8,6 +8,7 @@ import {
   buildPageEpubHtml,
 } from "@/lib/typography/pageLayout";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
+import { fetchCoverImageDataUri } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import { epubTypographyCss } from "@/lib/typography/bookStyles";
 
@@ -37,11 +38,19 @@ export async function buildEpubBuffer(
 ): Promise<Buffer> {
   const headingFonts = normalizeBookHeadingFonts(book.heading_fonts);
   const coverStyle = normalizeBookCoverStyle(book);
+  const coverImageSrc = coverUrl
+    ? await fetchCoverImageDataUri(coverUrl)
+    : null;
   const css = epubTypographyCss(writingModeCss(book.writing_mode), headingFonts);
 
   const bookCoverEntry = {
     title: "표지",
-    content: buildBookCoverEpubHtml(book.title, book.subtitle, coverStyle),
+    content: buildBookCoverEpubHtml(
+      book.title,
+      book.subtitle,
+      coverStyle,
+      coverImageSrc ?? coverUrl,
+    ),
     excludeFromToc: false,
   };
 

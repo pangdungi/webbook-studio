@@ -60,6 +60,7 @@ export function buildBookScrollDocument(
     | "cover_title_color"
   >,
   chapters: Pick<Chapter, "id" | "title" | "content_json" | "content_html">[],
+  coverImageUrl?: string | null,
 ): { bodyHtml: string; toc: ReaderTocEntry[]; pages: ReaderScrollPage[] } {
   const coverStyle = normalizeBookCoverStyle(book);
   const toc: ReaderTocEntry[] = [];
@@ -67,7 +68,12 @@ export function buildBookScrollDocument(
   const pages: ReaderScrollPage[] = [];
 
   const coverId = "wbs-book-cover";
-  const coverHtml = buildBookCoverEpubHtml(book.title, book.subtitle, coverStyle);
+  const coverHtml = buildBookCoverEpubHtml(
+    book.title,
+    book.subtitle,
+    coverStyle,
+    coverImageUrl,
+  );
   pages.push({ id: coverId, html: coverHtml });
   parts.push(wrapAnchor(coverId, coverHtml));
   toc.push({ label: "표지", href: coverId, depth: 0 });

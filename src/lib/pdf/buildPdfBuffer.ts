@@ -13,7 +13,8 @@ export async function buildPdfBufferFromBook(
     | "heading_fonts"
   >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
+  coverImageUrl?: string | null,
 ): Promise<Buffer> {
-  const html = buildBookPdfHtml(book, chapters);
+  const html = buildBookPdfHtml(book, chapters, coverImageUrl);
   return renderHtmlToPdf(html);
 }

@@ -3,6 +3,7 @@ import {
   type ReaderScrollPage,
 } from "@/lib/reader/buildBookScrollDocument";
 import type { Book, Chapter } from "@/lib/types/database";
+import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type ScrollResult =
@@ -10,7 +11,11 @@ type ScrollResult =
       ok: true;
       book: Pick<
         Book,
-        "title" | "subtitle" | "cover_bg_color" | "cover_title_color"
+        | "title"
+        | "subtitle"
+        | "cover_bg_color"
+        | "cover_title_color"
+        | "cover_path"
       >;
       bodyHtml: string;
       toc: ReturnType<typeof buildBookScrollDocument>["toc"];
@@ -26,7 +31,7 @@ export async function loadDraftBookScrollData(
 
   const { data: book, error: bookError } = await supabase
     .from("books")
-    .select("id, title, subtitle, cover_bg_color, cover_title_color")
+    .select("id, title, subtitle, cover_path, cover_bg_color, cover_title_color")
     .eq("id", bookId)
     .eq("created_by", adminUserId)
     .single();
@@ -45,7 +50,16 @@ export async function loadDraftBookScrollData(
     return { ok: false, error: "미리볼 챕터가 없습니다.", status: 400 };
   }
 
-  const { bodyHtml, toc, pages } = buildBookScrollDocument(book, chapters);
+  const coverImageUrl = await resolveBookCoverSignedUrl(
+    supabase.storage,
+    book.cover_path,
+    3600,
+  );
+  const { bodyHtml, toc, pages } = buildBookScrollDocument(
+    book,
+    chapters,
+    coverImageUrl,
+  );
   return { ok: true, book, bodyHtml, toc, pages };
 }
 
@@ -56,7 +70,9 @@ export async function loadPublishedBookScrollData(
 
   const { data: book, error: bookError } = await service
     .from("books")
-    .select("id, title, subtitle, cover_bg_color, cover_title_color, status, epub_storage_path")
+    .select(
+      "id, title, subtitle, cover_path, cover_bg_color, cover_title_color, status, epub_storage_path",
+    )
     .eq("id", bookId)
     .single();
 
@@ -78,6 +94,15 @@ export async function loadPublishedBookScrollData(
     return { ok: false, error: "챕터가 없습니다.", status: 404 };
   }
 
-  const { bodyHtml, toc, pages } = buildBookScrollDocument(book, chapters);
+  const coverImageUrl = await resolveBookCoverSignedUrl(
+    service.storage,
+    book.cover_path,
+    3600,
+  );
+  const { bodyHtml, toc, pages } = buildBookScrollDocument(
+    book,
+    chapters,
+    coverImageUrl,
+  );
   return { ok: true, book, bodyHtml, toc, pages };
 }

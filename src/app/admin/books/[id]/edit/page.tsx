@@ -6,6 +6,7 @@ import { isLocalDevHostname } from "@/lib/editor/localEditorOnly";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
+import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
@@ -32,6 +33,12 @@ export default async function EditBookPage({ params }: PageProps) {
 
   if (!book) notFound();
 
+  const initialCoverImageUrl = await resolveBookCoverSignedUrl(
+    supabase.storage,
+    book.cover_path,
+    60 * 60 * 24,
+  );
+
   const { data: chapters } = await supabase
     .from("chapters")
     .select("*")
@@ -42,6 +49,7 @@ export default async function EditBookPage({ params }: PageProps) {
     <LocalEditorGate bookId={id}>
       <EditorWorkspace
         bookId={id}
+        initialCoverImageUrl={initialCoverImageUrl}
         initialBook={{
           ...book,
           ...normalizeBookCoverStyle(book),

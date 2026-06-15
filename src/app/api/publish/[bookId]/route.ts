@@ -80,7 +80,11 @@ export async function POST(_request: Request, context: RouteContext) {
   let pdfError: string | null = null;
 
   try {
-    const pdfBuffer = await buildPdfBufferFromBook(bookForExport, chapters);
+    const pdfBuffer = await buildPdfBufferFromBook(
+      bookForExport,
+      chapters,
+      coverUrl,
+    );
     const { error: pdfUploadError } = await service.storage
       .from("book-epubs")
       .upload(pdfPath, pdfBuffer, {

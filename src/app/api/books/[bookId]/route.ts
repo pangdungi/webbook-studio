@@ -60,6 +60,7 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (typeof body.writing_mode === "string")
     updates.writing_mode = body.writing_mode;
   if (typeof body.cover_path === "string") updates.cover_path = body.cover_path;
+  if (body.cover_path === null) updates.cover_path = null;
   if (body.heading_fonts && typeof body.heading_fonts === "object") {
     updates.heading_fonts = normalizeBookHeadingFonts(body.heading_fonts);
   }

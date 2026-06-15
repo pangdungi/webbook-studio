@@ -21,6 +21,8 @@ export const bookBodyContinueClass = "book-body-p--continue";
 export const bookPageShellClass = "book-page-shell";
 export const bookPageCoverClass = "book-page--cover";
 export const bookPageBookCoverClass = "book-page--book-cover";
+export const bookPageBookCoverImageClass = "book-page--book-cover-image";
+export const bookCoverImageClass = "book-cover-image";
 export const bookBookTitleClass = "book-book-title";
 export const bookPageContentClass = "book-page--content";
 export const bookPageQuoteClass = "book-page--quote";
@@ -122,6 +124,28 @@ function pageBoxCss(p: string, important = false) {
       word-break: keep-all${i};
     }
     ${quotePageCss(p, i)}
+    ${bookCoverImagePageCss(p, i)}
+  `;
+}
+
+/** 책 표지 이미지 — 전체 화면 cover */
+export function bookCoverImagePageCss(scope: string, important = false) {
+  const p = scope ? `${scope} ` : "";
+  const i = important ? " !important" : "";
+
+  return `
+    ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      display: block${i};
+      padding: 0${i};
+      background-color: #ffffff${i};
+    }
+    ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
+      display: block${i};
+      width: 100%${i};
+      height: 100%${i};
+      object-fit: cover${i};
+      object-position: center center${i};
+    }
   `;
 }
 
@@ -457,6 +481,7 @@ export function bookPageHtmlScrollLayoutCss(important = false) {
     ${scope} .${bookPageShellSplashClass}:only-child {
       min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
     }
+    ${bookCoverImagePageCss(scope, important)}
   `;
 }
 
@@ -552,6 +577,7 @@ export function bookPageReaderCss(important = false) {
   return `
     ${bookPageCanvasCss()}
     ${pageBoxCss("", important)}
+    ${bookCoverImagePageCss("", important)}
     .${bookPageClass} {
       page-break-after: always${i};
       break-after: page${i};

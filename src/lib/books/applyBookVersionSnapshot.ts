@@ -12,6 +12,7 @@ export async function applyBookVersionSnapshot(
     .update({
       title: snapshot.book.title,
       subtitle: snapshot.book.subtitle,
+      cover_path: snapshot.book.cover_path ?? null,
       cover_bg_color: snapshot.book.cover_bg_color,
       cover_title_color: snapshot.book.cover_title_color,
       heading_fonts: snapshot.book.heading_fonts,

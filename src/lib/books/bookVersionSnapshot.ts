@@ -14,6 +14,7 @@ export type BookVersionChapterSnapshot = {
 export type BookVersionBookSnapshot = {
   title: string;
   subtitle: string | null;
+  cover_path: string | null;
   cover_bg_color: string;
   cover_title_color: string;
   heading_fonts: Book["heading_fonts"];
@@ -50,6 +51,7 @@ export function buildBookVersionSnapshot(
     book: {
       title: normalized.title,
       subtitle: normalized.subtitle,
+      cover_path: normalized.cover_path,
       cover_bg_color: normalized.cover_bg_color,
       cover_title_color: normalized.cover_title_color,
       heading_fonts: normalized.heading_fonts,

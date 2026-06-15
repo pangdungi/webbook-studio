@@ -31,13 +31,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Book not found" }, { status: 404 });
   }
 
-  const ext = file.name.split(".").pop() ?? "jpg";
-  const path = `${bookId}/${Date.now()}.${ext}`;
+  const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+  const purpose = formData.get("purpose");
+  const isCover = purpose === "cover";
+  const path = isCover
+    ? `${bookId}/cover.${ext}`
+    : `${bookId}/${Date.now()}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const { error } = await supabase.storage
     .from("book-assets")
-    .upload(path, buffer, { contentType: file.type, upsert: false });
+    .upload(path, buffer, { contentType: file.type, upsert: isCover });
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

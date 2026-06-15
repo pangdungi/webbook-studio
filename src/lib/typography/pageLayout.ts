@@ -7,6 +7,8 @@ import {
   bookChapterTitleClass,
   bookPageBodyClass,
   bookPageBookCoverClass,
+  bookPageBookCoverImageClass,
+  bookCoverImageClass,
   bookPageClass,
   bookPageContentClass,
   bookPageCoverClass,
@@ -39,7 +41,13 @@ export function buildBookCoverEpubHtml(
   title: string,
   subtitle: string | null | undefined,
   cover: Partial<BookCoverStyle>,
+  coverImageUrl?: string | null,
 ): string {
+  if (coverImageUrl?.trim()) {
+    const safeSrc = escapeHtml(coverImageUrl.trim());
+    return `<div class="${bookPageShellClass} ${bookPageShellSplashClass}"><article class="${bookPageClass} ${bookPageBookCoverClass} ${bookPageBookCoverImageClass}"><img class="${bookCoverImageClass}" src="${safeSrc}" alt="${escapeHtml(title.trim() || "표지")}" /></article></div>`;
+  }
+
   const { cover_bg_color, cover_title_color } = normalizeBookCoverStyle(cover);
   const safeTitle = escapeHtml(title.trim() || "제목 없음");
   const subtitleHtml = subtitle?.trim()

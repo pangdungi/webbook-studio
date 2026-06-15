@@ -68,9 +68,17 @@ function collectPageHtml(
     "title" | "subtitle" | "cover_bg_color" | "cover_title_color"
   >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
+  coverImageUrl?: string | null,
 ): string {
   const coverStyle = normalizeBookCoverStyle(book);
-  const parts: string[] = [buildBookCoverEpubHtml(book.title, book.subtitle, coverStyle)];
+  const parts: string[] = [
+    buildBookCoverEpubHtml(
+      book.title,
+      book.subtitle,
+      coverStyle,
+      coverImageUrl,
+    ),
+  ];
 
   for (const chapter of chapters) {
     const parsed = parseChapterContent(
@@ -97,11 +105,12 @@ export function buildBookPdfHtml(
     | "heading_fonts"
   >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
+  coverImageUrl?: string | null,
 ): string {
   const headingFonts: BookHeadingFonts = normalizeBookHeadingFonts(
     book.heading_fonts,
   );
-  const bodyInner = collectPageHtml(book, chapters);
+  const bodyInner = collectPageHtml(book, chapters, coverImageUrl);
   const printCss = bookPdfPrintCss();
   const pdfType = bookPdfTypographyCss();
   const headingVars = `

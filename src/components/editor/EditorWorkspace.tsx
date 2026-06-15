@@ -42,6 +42,7 @@ import {
 } from "@/lib/books/bookVersionSnapshot";
 import { BookVersionsPanel, createAutoBookVersionIfChanged } from "@/components/editor/BookVersionsPanel";
 import { getEditorEnvironmentLabel } from "@/lib/editor/editorEnvironment";
+import { uploadBookCover } from "@/lib/editor/uploadBookCover";
 import { useEditorSessionLock } from "@/components/editor/useEditorSessionLock";
 
 function defaultPageIdForChapter(chapter: Chapter): string | undefined {
@@ -61,12 +62,14 @@ type Props = {
   bookId: string;
   initialBook: Book;
   initialChapters: Chapter[];
+  initialCoverImageUrl?: string | null;
 };
 
 export function EditorWorkspace({
   bookId,
   initialBook,
   initialChapters,
+  initialCoverImageUrl = null,
 }: Props) {
   const router = useRouter();
   const [book, setBook] = useState(() => ({
@@ -75,6 +78,10 @@ export function EditorWorkspace({
     heading_fonts: normalizeBookHeadingFonts(initialBook.heading_fonts),
     ...normalizeBookReaderFields(initialBook),
   }));
+  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(
+    initialCoverImageUrl,
+  );
+  const [coverUploading, setCoverUploading] = useState(false);
   const [editorPanel, setEditorPanel] = useState<"book-cover" | "chapter">(
     "chapter",
   );
@@ -252,6 +259,7 @@ export function EditorWorkspace({
       ...book,
       title: s.title,
       subtitle: s.subtitle,
+      cover_path: s.cover_path ?? book.cover_path,
       cover_bg_color: s.cover_bg_color,
       cover_title_color: s.cover_title_color,
       heading_fonts: s.heading_fonts,
@@ -498,6 +506,7 @@ export function EditorWorkspace({
         body: JSON.stringify({
           title: book.title,
           heading_fonts: book.heading_fonts,
+          cover_path: book.cover_path,
           cover_bg_color: book.cover_bg_color,
           cover_title_color: book.cover_title_color,
           reader_pitch: readerPitch,
@@ -541,6 +550,7 @@ export function EditorWorkspace({
     applyFlushedChapter,
     book.title,
     book.heading_fonts,
+    book.cover_path,
     book.cover_bg_color,
     book.cover_title_color,
     readerPitch,
@@ -817,6 +827,46 @@ export function EditorWorkspace({
     },
     [book, bookId],
   );
+
+  const updateCoverPath = useCallback(
+    async (coverPath: string | null, previewUrl: string | null) => {
+      setBook((b) => ({ ...b, cover_path: coverPath }));
+      setCoverImageUrl(previewUrl);
+      await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cover_path: coverPath }),
+      });
+    },
+    [bookId],
+  );
+
+  const handleUploadCover = useCallback(
+    async (file: File) => {
+      setCoverUploading(true);
+      try {
+        const { path, url } = await uploadBookCover(file, bookId);
+        await updateCoverPath(path, url);
+      } catch (err) {
+        const detail =
+          err instanceof Error ? err.message : "표지 업로드에 실패했습니다.";
+        alert(detail);
+      } finally {
+        setCoverUploading(false);
+      }
+    },
+    [bookId, updateCoverPath],
+  );
+
+  const handleRemoveCover = useCallback(async () => {
+    try {
+      await updateCoverPath(null, null);
+    } catch (err) {
+      const detail =
+        err instanceof Error ? err.message : "표지 제거에 실패했습니다.";
+      alert(detail);
+    }
+  }, [updateCoverPath]);
 
   const stashActiveChapter = useCallback(async (): Promise<boolean> => {
     return flushActiveChapter();
@@ -1387,7 +1437,13 @@ export function EditorWorkspace({
                 cover_bg_color: displayBook.cover_bg_color,
                 cover_title_color: displayBook.cover_title_color,
               }}
+              coverImageUrl={
+                displayBook.cover_path ? coverImageUrl : null
+              }
+              uploading={coverUploading}
               onCoverChange={(patch) => void updateCoverStyle(patch)}
+              onUploadCover={handleUploadCover}
+              onRemoveCover={handleRemoveCover}
             />
           ) : activeChapter ? (
             <BookEditor
