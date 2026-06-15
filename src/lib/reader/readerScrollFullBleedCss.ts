@@ -1,7 +1,10 @@
 import {
   BOOK_PAGE_HEIGHT_VAR,
+  bookCoverImageClass,
   bookCoverImagePageCss,
   bookPageBodyClass,
+  bookPageBookCoverClass,
+  bookPageBookCoverImageClass,
   bookPageClass,
   bookPageContentClass,
   bookPageQuoteClass,
@@ -90,6 +93,24 @@ export function readerScrollFullBleedCss() {
     ${readerScrollQuotePageBoxCss()}
     ${bookPageScrollSplashPageCss(SURFACE, true)}
     ${bookCoverImagePageCss(SURFACE, true)}
+    ${SURFACE} .${bookPageShellSplashClass}:has(.${bookPageBookCoverImageClass}) {
+      align-items: center${i};
+      justify-content: center${i};
+      min-height: min(72vh, 34rem)${i};
+      padding: 2.5rem 1.25rem${i};
+      background-color: #fafaf9${i};
+    }
+    ${SURFACE} .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      width: auto${i};
+      max-width: 100%${i};
+      min-width: 0${i};
+      margin-left: auto${i};
+      margin-right: auto${i};
+    }
+    ${SURFACE} .${bookPageBookCoverImageClass} .${bookCoverImageClass} {
+      width: auto${i};
+      max-width: min(100%, 22rem)${i};
+    }
     ${SCROLL} {
       background-color: #ffffff${i};
     }
@@ -113,8 +134,8 @@ export function readerScrollFullBleedCss() {
       gap: 0${i};
       align-items: stretch${i};
     }
-    ${SURFACE} .${bookPageClass},
-    ${SURFACE} .${bookPageShellSplashClass} .${bookPageClass},
+    ${SURFACE} .${bookPageClass}:not(.${bookPageBookCoverImageClass}),
+    ${SURFACE} .${bookPageShellSplashClass} .${bookPageClass}:not(.${bookPageBookCoverImageClass}),
     ${SURFACE} .${bookPageShellFlowClass} .${bookPageClass} {
       width: 100%${i};
       max-width: none${i};
@@ -144,6 +165,14 @@ export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: num
     shell.style.setProperty("--book-page-w", "100%");
   });
   root.querySelectorAll<HTMLElement>(`.${bookPageClass}`).forEach((page) => {
+    if (page.classList.contains(bookPageBookCoverImageClass)) {
+      page.style.removeProperty("min-width");
+      page.style.setProperty("width", "auto");
+      page.style.setProperty("max-width", "100%");
+      page.style.setProperty("margin-left", "auto");
+      page.style.setProperty("margin-right", "auto");
+      return;
+    }
     stretch(page);
   });
 }

@@ -3,6 +3,9 @@ import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
 /** A4 기준 — 210×297mm, 편집·EPUB·리더 동일 페이지 크기 */
 export const BOOK_PAGE_REF_WIDTH = "42rem";
 export const BOOK_PAGE_ASPECT = "297 / 210";
+/** 이미지 표지 — 본문 페이지보다 작게, 책 한 권 크기 */
+export const BOOK_COVER_IMAGE_MAX_WIDTH = "min(100%, 22rem)";
+export const BOOK_COVER_IMAGE_MAX_HEIGHT = "min(68vh, 32rem)";
 export const BOOK_PAGE_WIDTH_VAR = "--book-page-w";
 export const BOOK_PAGE_HEIGHT_VAR = "--book-page-h";
 /** 리더 뷰포트 — EpubViewer가 px로 주입 */
@@ -128,25 +131,35 @@ function pageBoxCss(p: string, important = false) {
   `;
 }
 
-/** 책 표지 이미지 — 잘림 없이 전체 표시 (contain) */
+/** 책 표지 이미지 — 가운데, 책 크기로 (전체 너비 X) */
 export function bookCoverImagePageCss(scope: string, important = false) {
   const p = scope ? `${scope} ` : "";
   const i = important ? " !important" : "";
 
   return `
     ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
-      display: block${i};
-      padding: 0${i};
-      background-color: #ffffff${i};
+      display: flex${i};
+      flex-direction: column${i};
+      align-items: center${i};
+      justify-content: center${i};
+      box-sizing: border-box${i};
+      width: 100%${i};
+      max-width: 100%${i};
+      min-height: min(72vh, 34rem)${i};
+      padding: 2.5rem 1.25rem${i};
+      background-color: #fafaf9${i};
       overflow: visible${i};
     }
     ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
       display: block${i};
-      width: 100%${i};
+      width: auto${i};
+      max-width: ${BOOK_COVER_IMAGE_MAX_WIDTH}${i};
       height: auto${i};
-      max-width: 100%${i};
+      max-height: ${BOOK_COVER_IMAGE_MAX_HEIGHT}${i};
       object-fit: contain${i};
-      object-position: center top${i};
+      object-position: center center${i};
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 8px 28px rgb(0 0 0 / 0.1)${i};
+      border-radius: 2px${i};
     }
   `;
 }
@@ -689,6 +702,9 @@ export function bookPageEditorShellCss() {
     .book-page-editor-scroll .book-page-shell .book-page--cover {
       align-self: stretch;
       width: 100%;
+    }
+    .book-page-editor-scroll .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      min-height: min(72vh, 34rem);
     }
     .book-page-editor-scroll .book-page--cover .${bookPageBodyClass} {
       width: 100%;

@@ -69,16 +69,23 @@ export function readerScrollSurfaceCss(
       min-height: 100%${i};
       max-height: 100%${i};
     }
+    .reader-scroll-viewport--paginated .${bookPageShellSplashClass}:has(.${bookPageBookCoverImageClass}) {
+      align-items: center${i};
+      justify-content: center${i};
+      background-color: #fafaf9${i};
+    }
     .reader-scroll-viewport--paginated .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
       display: flex${i};
       align-items: center${i};
       justify-content: center${i};
-      overflow: hidden${i};
+      width: auto${i};
+      max-width: 100%${i};
+      height: auto${i};
+      min-height: 0${i};
+      max-height: 100%${i};
+      overflow: visible${i};
     }
     ${bookCoverImagePageCss(".reader-scroll-viewport--paginated", true)}
-    .reader-scroll-viewport--paginated .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
-      max-height: 100%${i};
-    }
     .reader-scroll-viewport--paginated .${bookPageShellClass},
     .reader-scroll-viewport--paginated .${bookPageClass} {
       width: 100%${i};
