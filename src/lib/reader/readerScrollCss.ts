@@ -2,8 +2,12 @@ import type { ReaderViewMode } from "@/lib/reader/viewMode";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import { bookFontFaceCss } from "@/lib/typography/headingFonts";
 import {
+  bookCoverImageClass,
+  bookCoverImagePageCss,
   bookPageBodyClass,
   bookPageClass,
+  bookPageBookCoverClass,
+  bookPageBookCoverImageClass,
   bookPageContentClass,
   bookPageQuoteClass,
   bookPageShellClass,
@@ -63,6 +67,16 @@ export function readerScrollSurfaceCss(
     .reader-scroll-viewport--paginated .${bookPageShellSplashClass} .${bookPageClass} {
       height: 100%${i};
       min-height: 100%${i};
+      max-height: 100%${i};
+    }
+    .reader-scroll-viewport--paginated .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      display: flex${i};
+      align-items: center${i};
+      justify-content: center${i};
+      overflow: hidden${i};
+    }
+    ${bookCoverImagePageCss(".reader-scroll-viewport--paginated", true)}
+    .reader-scroll-viewport--paginated .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
       max-height: 100%${i};
     }
     .reader-scroll-viewport--paginated .${bookPageShellClass},

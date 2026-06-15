@@ -25,17 +25,23 @@ import { buildContentPageStorageHtml } from "@/lib/editor/contentPageStorageHtml
 import {
   getWritingEvalCache,
   getWritingReviewCache,
+  getPageSocialCopyCache,
   setWritingEvalCache,
   setWritingReviewCache,
+  setPageSocialCopyCache,
   writingAssistPageKey,
   clearWritingEvalPending,
   clearWritingReviewPending,
+  clearPageSocialCopyPending,
   getWritingEvalPending,
   getWritingReviewPending,
+  getPageSocialCopyPending,
   setWritingEvalPending,
   setWritingReviewPending,
+  setPageSocialCopyPending,
   type WritingEvalCacheEntry,
   type WritingReviewCacheEntry,
+  type PageSocialCopyCacheEntry,
 } from "@/lib/editor/writingAssistCache";
 import { buildReviewCacheEntry } from "@/lib/writingReview/buildReviewCacheEntry";
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
@@ -62,6 +68,8 @@ import { SpellcheckPanel } from "./SpellcheckPanel";
 import { PageMemoDialog } from "./PageMemoDialog";
 import { WritingReviewPanel } from "./WritingReviewPanel";
 import { WritingEvaluationPanel } from "./WritingEvaluationPanel";
+import { PageSocialCopyPanel } from "./PageSocialCopyPanel";
+import type { PageSocialCopyReport } from "@/lib/pageSocialCopy/types";
 import type { WritingEvaluationReport } from "@/lib/writingEvaluation/types";
 import type { SpellCorrection } from "@/lib/types/database";
 import {
@@ -105,6 +113,7 @@ type Props = {
   chapterId: string;
   chapterTitle: string;
   bookId: string;
+  bookTitle?: string;
   initialContent: Record<string, unknown>;
   initialContentHtml?: string;
   onContentChange: (
@@ -179,6 +188,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   chapterId,
   chapterTitle,
   bookId,
+  bookTitle = "",
   initialContent,
   initialContentHtml = "",
   onContentChange,
@@ -304,18 +314,36 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
   const [reviewHasResult, setReviewHasResult] = useState(false);
   const [evalHasResult, setEvalHasResult] = useState(false);
 
+  const [socialOpen, setSocialOpen] = useState(false);
+  const [pendingSocialPages, setPendingSocialPages] = useState<Set<string>>(
+    () => new Set(),
+  );
+  const [socialError, setSocialError] = useState<string | null>(null);
+  const [socialProvider, setSocialProvider] = useState<string | null>(null);
+  const [socialReport, setSocialReport] = useState<PageSocialCopyReport | null>(
+    null,
+  );
+  const [socialScannedLength, setSocialScannedLength] = useState(0);
+  const [socialHasResult, setSocialHasResult] = useState(false);
+
   const reviewPanelPageIdRef = useRef<string | null>(null);
   const evalPanelPageIdRef = useRef<string | null>(null);
+  const socialPanelPageIdRef = useRef<string | null>(null);
   const reviewStatePageIdRef = useRef<string | null>(null);
   const evalStatePageIdRef = useRef<string | null>(null);
+  const socialStatePageIdRef = useRef<string | null>(null);
   const evalPageSubtitleRef = useRef("");
+  const socialPageSubtitleRef = useRef("");
   const reviewOpenRef = useRef(reviewOpen);
   reviewOpenRef.current = reviewOpen;
   const evalOpenRef = useRef(evalOpen);
   evalOpenRef.current = evalOpen;
+  const socialOpenRef = useRef(socialOpen);
+  socialOpenRef.current = socialOpen;
 
   const reviewLoading = pendingReviewPages.has(activePageId);
   const evalLoading = pendingEvalPages.has(activePageId);
+  const socialLoading = pendingSocialPages.has(activePageId);
 
   const assistPageKey = useCallback(
     (pageId: string) =>
@@ -335,6 +363,14 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     (pageId: string | null, entry: WritingEvalCacheEntry) => {
       if (!pageId) return;
       setWritingEvalCache(assistPageKey(pageId), entry);
+    },
+    [assistPageKey],
+  );
+
+  const persistSocialCache = useCallback(
+    (pageId: string | null, entry: PageSocialCopyCacheEntry) => {
+      if (!pageId) return;
+      setPageSocialCopyCache(assistPageKey(pageId), entry);
     },
     [assistPageKey],
   );
@@ -366,6 +402,18 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     evalPageSubtitleRef.current = entry.pageSubtitle;
     setEvalHasResult(true);
   }, []);
+
+  const applySocialEntryToState = useCallback(
+    (entry: PageSocialCopyCacheEntry) => {
+      setSocialReport(entry.report);
+      setSocialError(entry.error);
+      setSocialProvider(entry.provider);
+      setSocialScannedLength(entry.scannedLength);
+      socialPageSubtitleRef.current = entry.pageSubtitle;
+      setSocialHasResult(!!entry.report);
+    },
+    [],
+  );
 
   const markReviewPendingStart = useCallback(
     (pageId: string, scannedLength: number) => {
@@ -409,8 +457,29 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [assistPageKey],
   );
 
+  const markSocialPendingStart = useCallback(
+    (pageId: string, scannedLength: number) => {
+      setPageSocialCopyPending(assistPageKey(pageId), { scannedLength });
+      setPendingSocialPages((prev) => new Set(prev).add(pageId));
+    },
+    [assistPageKey],
+  );
+
+  const markSocialPendingDone = useCallback(
+    (pageId: string) => {
+      clearPageSocialCopyPending(assistPageKey(pageId));
+      setPendingSocialPages((prev) => {
+        if (!prev.has(pageId)) return prev;
+        const next = new Set(prev);
+        next.delete(pageId);
+        return next;
+      });
+    },
+    [assistPageKey],
+  );
+
   const activeEditor = editorsRef.current.get(activePageId) ?? null;
-  const sidePanelOpen = reviewOpen || evalOpen;
+  const sidePanelOpen = reviewOpen || evalOpen || socialOpen;
 
   const saveReviewCache = useCallback(
     (pageId: string | null) => {
@@ -584,6 +653,28 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     ],
   );
 
+  const saveSocialCache = useCallback(
+    (pageId: string | null, pageSubtitle: string) => {
+      if (!pageId || (!socialHasResult && !socialError)) return;
+      socialPageSubtitleRef.current = pageSubtitle;
+      persistSocialCache(pageId, {
+        report: socialReport,
+        provider: socialProvider,
+        error: socialError,
+        scannedLength: socialScannedLength,
+        pageSubtitle,
+      });
+    },
+    [
+      persistSocialCache,
+      socialHasResult,
+      socialError,
+      socialReport,
+      socialProvider,
+      socialScannedLength,
+    ],
+  );
+
   const loadEvalCache = useCallback((pageId: string) => {
     evalStatePageIdRef.current = pageId;
     const key = assistPageKey(pageId);
@@ -618,6 +709,32 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     setEvalHasResult(true);
   }, [assistPageKey]);
 
+  const loadSocialCache = useCallback((pageId: string) => {
+    socialStatePageIdRef.current = pageId;
+    const key = assistPageKey(pageId);
+    const pending = getPageSocialCopyPending(key);
+    if (pending) {
+      setSocialReport(null);
+      setSocialError(null);
+      setSocialProvider(null);
+      setSocialScannedLength(pending.scannedLength);
+      setSocialHasResult(false);
+      setPendingSocialPages((prev) => new Set(prev).add(pageId));
+      return;
+    }
+
+    const cached = getPageSocialCopyCache(key);
+    if (!cached) {
+      setSocialReport(null);
+      setSocialError(null);
+      setSocialProvider(null);
+      setSocialScannedLength(0);
+      setSocialHasResult(false);
+      return;
+    }
+    applySocialEntryToState(cached);
+  }, [applySocialEntryToState, assistPageKey]);
+
   const closeWritingEvaluation = useCallback(
     (pageSubtitle = "") => {
       saveEvalCache(evalPanelPageIdRef.current, pageSubtitle);
@@ -631,6 +748,14 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     clearSpellcheckHighlights(activeEditor);
     setReviewOpen(false);
   }, [activeEditor, saveReviewCache]);
+
+  const closePageSocialCopy = useCallback(
+    (pageSubtitle = "") => {
+      saveSocialCache(socialPanelPageIdRef.current, pageSubtitle);
+      setSocialOpen(false);
+    },
+    [saveSocialCache],
+  );
 
   const refreshReviewDiff = useCallback(
     (
@@ -1491,8 +1616,25 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       }
       saveEvalCache(evalPageId, evalSubtitle);
     }
+    if (socialOpen) {
+      const socialPageId = socialPanelPageIdRef.current ?? activePageId;
+      const socialPage = pages.find((p) => p.id === socialPageId);
+      let socialSubtitle = "";
+      if (socialPage?.kind === "content") {
+        const idx = pages
+          .filter((p) => p.kind === "content")
+          .findIndex((p) => p.id === socialPage.id);
+        socialSubtitle =
+          getPageSubtitle(socialPage) ||
+          getPageTocLabel(socialPage, idx >= 0 ? idx : 0);
+      } else if (socialPage) {
+        socialSubtitle = socialPage.title ?? "";
+      }
+      saveSocialCache(socialPageId, socialSubtitle);
+    }
     setReviewOpen(false);
     setEvalOpen(false);
+    setSocialOpen(false);
     setSpellOpen(true);
     setSpellLoading(true);
     setSpellError(null);
@@ -1533,9 +1675,11 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     pages,
     reviewOpen,
     evalOpen,
+    socialOpen,
     applySpellcheckResult,
     saveReviewCache,
     saveEvalCache,
+    saveSocialCache,
   ]);
 
   const applyAllCorrections = useCallback(() => {
@@ -1598,8 +1742,10 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       return;
     }
     closeWritingEvaluation(activePageTitleValue);
+    closePageSocialCopy(activePageTitleValue);
     setSpellOpen(false);
     setEvalOpen(false);
+    setSocialOpen(false);
     setReviewOpen(true);
     reviewPanelPageIdRef.current = activePageId;
     loadReviewCache(activePageId, activeEditor);
@@ -1610,6 +1756,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     activeEditor,
     closeWritingReview,
     closeWritingEvaluation,
+    closePageSocialCopy,
     loadReviewCache,
   ]);
 
@@ -1620,6 +1767,8 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     }
     setSpellOpen(false);
     closeWritingReview();
+    closePageSocialCopy(activePageTitleValue);
+    setSocialOpen(false);
     setEvalOpen(true);
     evalPanelPageIdRef.current = activePageId;
     loadEvalCache(activePageId);
@@ -1629,7 +1778,31 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     activePageTitleValue,
     closeWritingEvaluation,
     closeWritingReview,
+    closePageSocialCopy,
     loadEvalCache,
+  ]);
+
+  const togglePageSocialCopyPanel = useCallback(() => {
+    if (socialOpen) {
+      closePageSocialCopy(activePageTitleValue);
+      return;
+    }
+    setSpellOpen(false);
+    closeWritingReview();
+    closeWritingEvaluation(activePageTitleValue);
+    setReviewOpen(false);
+    setEvalOpen(false);
+    setSocialOpen(true);
+    socialPanelPageIdRef.current = activePageId;
+    loadSocialCache(activePageId);
+  }, [
+    socialOpen,
+    activePageId,
+    activePageTitleValue,
+    closePageSocialCopy,
+    closeWritingReview,
+    closeWritingEvaluation,
+    loadSocialCache,
   ]);
 
   const prevActivePageIdForPanelsRef = useRef(activePageId);
@@ -1645,6 +1818,9 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     if (evalStatePageIdRef.current === prev) {
       saveEvalCache(prev, pageSubtitleFor(prevPage));
     }
+    if (socialStatePageIdRef.current === prev) {
+      saveSocialCache(prev, pageSubtitleFor(prevPage));
+    }
 
     const nextEditor = editorsRef.current.get(activePageId) ?? null;
     if (reviewOpen) {
@@ -1655,15 +1831,22 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
       evalPanelPageIdRef.current = activePageId;
       loadEvalCache(activePageId);
     }
+    if (socialOpen) {
+      socialPanelPageIdRef.current = activePageId;
+      loadSocialCache(activePageId);
+    }
   }, [
     activePageId,
     pages,
     reviewOpen,
     evalOpen,
+    socialOpen,
     saveReviewCache,
     saveEvalCache,
+    saveSocialCache,
     loadReviewCache,
     loadEvalCache,
+    loadSocialCache,
     pageSubtitleFor,
   ]);
 
@@ -1744,6 +1927,85 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     markEvalPendingDone,
     markEvalPendingStart,
     persistEvalCache,
+  ]);
+
+  const runPageSocialCopy = useCallback(async () => {
+    const pageId = activePageIdRef.current;
+    const editor = editorsRef.current.get(pageId);
+    const page = pagesRef.current.find((p) => p.id === pageId);
+    if (!editor || page?.kind !== "content") return;
+
+    const { plain: pageText } = getWritingReviewPlainFromEditor(editor);
+    const pageSubtitle = pageSubtitleInputValue(page);
+    socialStatePageIdRef.current = pageId;
+    socialPageSubtitleRef.current = pageSubtitle;
+    markSocialPendingStart(pageId, pageText.length);
+
+    if (socialOpenRef.current && activePageIdRef.current === pageId) {
+      setSocialScannedLength(pageText.length);
+      setSocialError(null);
+      setSocialProvider(null);
+      setSocialReport(null);
+      setSocialHasResult(false);
+    }
+
+    const finishSocial = (entry: PageSocialCopyCacheEntry) => {
+      persistSocialCache(pageId, entry);
+      markSocialPendingDone(pageId);
+      if (activePageIdRef.current === pageId && socialOpenRef.current) {
+        socialStatePageIdRef.current = pageId;
+        socialPanelPageIdRef.current = pageId;
+        applySocialEntryToState(entry);
+      }
+    };
+
+    try {
+      const res = await fetch("/api/page-social-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pageText,
+          pageTitle: pageSubtitle,
+          chapterTitle,
+          bookTitle,
+        }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        finishSocial({
+          report: null,
+          provider: null,
+          error: data.error ?? "SNS 카피 생성에 실패했습니다.",
+          scannedLength: pageText.length,
+          pageSubtitle,
+        });
+        return;
+      }
+
+      finishSocial({
+        report: data.report ?? null,
+        provider: data.provider ?? null,
+        error: null,
+        scannedLength: pageText.length,
+        pageSubtitle,
+      });
+    } catch {
+      finishSocial({
+        report: null,
+        provider: null,
+        error: "네트워크 오류로 SNS 카피 생성에 실패했습니다.",
+        scannedLength: pageText.length,
+        pageSubtitle,
+      });
+    }
+  }, [
+    applySocialEntryToState,
+    bookTitle,
+    chapterTitle,
+    markSocialPendingDone,
+    markSocialPendingStart,
+    persistSocialCache,
   ]);
 
   const canDeletePage = (page: BookPage) => page.kind !== "chapter-cover";
@@ -1916,6 +2178,13 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </ToolbarButton>
         <ToolbarButton disabled={!isContentPageActive} onClick={runSpellcheck}>
           맞춤법
+        </ToolbarButton>
+        <ToolbarButton
+          disabled={!isContentPageActive}
+          active={socialOpen}
+          onClick={togglePageSocialCopyPanel}
+        >
+          릴스·캐러셀
         </ToolbarButton>
       </div>
 
@@ -2185,9 +2454,23 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
             onClose={closeWritingReview}
           />
         )}
+
+        {socialOpen && (
+          <PageSocialCopyPanel
+            report={socialReport}
+            loading={socialLoading}
+            error={socialError}
+            provider={socialProvider}
+            scannedLength={socialScannedLength}
+            pageSubtitle={activePageTitleValue}
+            hasResult={socialHasResult}
+            onGenerate={() => void runPageSocialCopy()}
+            onClose={() => closePageSocialCopy(activePageTitleValue)}
+          />
+        )}
       </div>
 
-      {spellOpen && !reviewOpen && !evalOpen && (
+      {spellOpen && !reviewOpen && !evalOpen && !socialOpen && (
         <SpellcheckPanel
           corrections={corrections}
           correctedText={correctedText}

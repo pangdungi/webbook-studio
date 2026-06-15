@@ -5,15 +5,42 @@ import { buildReaderUrl } from "@/lib/utils/tokens";
 import { ensurePrimaryReaderToken } from "@/lib/access/bookToken";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
+import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 300;
+
+const PDF_PUBLISH_TIMEOUT_MS = 55_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} 시간 초과 (${Math.round(ms / 1000)}초)`)), ms);
+    }),
+  ]);
+}
 
 export async function POST(_request: Request, context: RouteContext) {
+  try {
+    return await publishBook(_request, context);
+  } catch (err) {
+    console.error("[publish]", err);
+    return NextResponse.json(
+      {
+        error:
+          err instanceof Error ? err.message : "출판 중 오류가 발생했습니다.",
+      },
+      { status: 500 },
+    );
+  }
+}
+
+async function publishBook(_request: Request, context: RouteContext) {
   const admin = await requireAdmin();
   if (!admin) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -47,13 +74,10 @@ export async function POST(_request: Request, context: RouteContext) {
     );
   }
 
-  let coverUrl: string | null = null;
-  if (book.cover_path) {
-    const { data: signed } = await service.storage
-      .from("book-assets")
-      .createSignedUrl(book.cover_path, 3600);
-    coverUrl = signed?.signedUrl ?? null;
-  }
+  /* PDF·EPUB용 — signed URL (data URI는 HTML 비대·Playwright 지연) */
+  const coverUrl = book.cover_path
+    ? await resolveBookCoverSignedUrl(service.storage, book.cover_path, 3600)
+    : null;
 
   const bookForExport = {
     ...book,
@@ -75,15 +99,34 @@ export async function POST(_request: Request, context: RouteContext) {
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
+  /* EPUB 업로드 직후 출판 처리 — PDF 실패해도 웹·EPUB 독자 링크는 사용 가능 */
+  const publishedAt = new Date().toISOString();
+  const { data: updatedBook, error: updateError } = await supabase
+    .from("books")
+    .update({
+      status: "published",
+      epub_storage_path: epubPath,
+      published_at: publishedAt,
+    })
+    .eq("id", bookId)
+    .select()
+    .single();
+
+  if (updateError) {
+    return NextResponse.json({ error: updateError.message }, { status: 500 });
+  }
+
+  const primaryToken = await ensurePrimaryReaderToken(supabase, bookId);
+
   const pdfPath = `${bookId}/book.pdf`;
   let pdfStoragePath: string | null = null;
   let pdfError: string | null = null;
 
   try {
-    const pdfBuffer = await buildPdfBufferFromBook(
-      bookForExport,
-      chapters,
-      coverUrl,
+    const pdfBuffer = await withTimeout(
+      buildPdfBufferFromBook(bookForExport, chapters, coverUrl),
+      PDF_PUBLISH_TIMEOUT_MS,
+      "PDF 생성",
     );
     const { error: pdfUploadError } = await service.storage
       .from("book-epubs")
@@ -96,32 +139,24 @@ export async function POST(_request: Request, context: RouteContext) {
       pdfError = pdfUploadError.message;
     } else {
       pdfStoragePath = pdfPath;
+      await supabase
+        .from("books")
+        .update({ pdf_storage_path: pdfPath })
+        .eq("id", bookId);
     }
   } catch (err) {
     pdfError =
       err instanceof Error ? err.message : "PDF 생성에 실패했습니다.";
   }
 
-  const { data: updatedBook, error: updateError } = await supabase
+  const { data: bookWithPdf } = await supabase
     .from("books")
-    .update({
-      status: "published",
-      epub_storage_path: epubPath,
-      pdf_storage_path: pdfStoragePath,
-      published_at: new Date().toISOString(),
-    })
+    .select("*")
     .eq("id", bookId)
-    .select()
     .single();
 
-  if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
-  }
-
-  const primaryToken = await ensurePrimaryReaderToken(supabase, bookId);
-
   return NextResponse.json({
-    book: updatedBook,
+    book: bookWithPdf ?? updatedBook,
     readerUrl: buildReaderUrl(primaryToken.token),
     token: primaryToken.token,
     pdfReady: Boolean(pdfStoragePath),

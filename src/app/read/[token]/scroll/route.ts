@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { validateReaderToken } from "@/lib/access/validate";
 import { loadPublishedBookScrollData } from "@/lib/reader/loadBookScrollData";
 import { READER_SCROLL_DOC_VERSION } from "@/lib/reader/scrollDocVersion";
-
 type RouteContext = { params: Promise<{ token: string }> };
 
 /** 독자 스크롤 — 한 페이지 HTML (웹 스크롤) */

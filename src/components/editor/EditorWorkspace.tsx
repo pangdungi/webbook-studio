@@ -6,12 +6,14 @@ import { BookCoverEditor } from "@/components/editor/BookCoverEditor";
 import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
 import { ReaderAnalysisPanel } from "@/components/editor/ReaderAnalysisPanel";
+import { SalesPageCopyPanel } from "@/components/editor/SalesPageCopyPanel";
 import {
   normalizeBookCoverStyle,
   type BookCoverStyle,
 } from "@/lib/books/coverStyle";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
 import { buildChapterSample } from "@/lib/readerAnalysis/sampleText";
+import type { SalesPageCopyReport } from "@/lib/salesPageCopy/types";
 import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
 import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
 import type { Book, Chapter } from "@/lib/types/database";
@@ -99,6 +101,15 @@ export function EditorWorkspace({
   const [readerReport, setReaderReport] = useState<ReaderAnalysisReport | null>(
     () => initialReader.reader_analysis,
   );
+  const [salesPanelOpen, setSalesPanelOpen] = useState(false);
+  const [salesCopyReport, setSalesCopyReport] =
+    useState<SalesPageCopyReport | null>(() => initialReader.sales_page_copy);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesError, setSalesError] = useState<string | null>(null);
+  const [salesProvider, setSalesProvider] = useState<string | null>(null);
+  const [salesChaptersAnalyzed, setSalesChaptersAnalyzed] = useState<
+    number | null
+  >(null);
   const [readerPanelOpen, setReaderPanelOpen] = useState(false);
   const [readerLoading, setReaderLoading] = useState(false);
   const [readerError, setReaderError] = useState<string | null>(null);
@@ -265,6 +276,7 @@ export function EditorWorkspace({
       heading_fonts: s.heading_fonts,
       reader_pitch: s.reader_pitch,
       reader_analysis: s.reader_analysis,
+      sales_page_copy: s.sales_page_copy ?? book.sales_page_copy,
     };
   }, [book, versionPreview]);
 
@@ -499,6 +511,9 @@ export function EditorWorkspace({
       const normalizedReport = readerReport
         ? normalizeReaderAnalysisReport(readerReport)
         : null;
+      const normalizedSalesCopy = salesCopyReport
+        ? salesCopyReport
+        : null;
 
       const bookRes = await fetch(`/api/books/${bookId}`, {
         method: "PATCH",
@@ -511,6 +526,7 @@ export function EditorWorkspace({
           cover_title_color: book.cover_title_color,
           reader_pitch: readerPitch,
           ...(normalizedReport ? { reader_analysis: normalizedReport } : {}),
+          ...(normalizedSalesCopy ? { sales_page_copy: normalizedSalesCopy } : {}),
         }),
       });
 
@@ -518,7 +534,7 @@ export function EditorWorkspace({
         const data = await bookRes.json().catch(() => ({}));
         let errMsg =
           typeof data.error === "string" ? data.error : "책 정보 저장 실패";
-        if (/column|does not exist|reader_|cover_|heading_fonts/i.test(errMsg)) {
+        if (/column|does not exist|reader_|cover_|heading_fonts|sales_page_copy/i.test(errMsg)) {
           errMsg = `${errMsg}\n\nSupabase SQL Editor에서 supabase/migrations/ 아래 마이그레이션 파일을 아직 안 돌렸을 수 있습니다.`;
         }
         if (bookRes.status === 401) {
@@ -555,6 +571,7 @@ export function EditorWorkspace({
     book.cover_title_color,
     readerPitch,
     readerReport,
+    salesCopyReport,
     bookId,
     manualSaving,
     saveChapter,
@@ -661,6 +678,86 @@ export function EditorWorkspace({
       setReaderLoading(false);
     }
   }, [book.title, readerPitch, readerIncludeSample, saveReaderData]);
+
+  const saveSalesPageCopy = useCallback(
+    async (report: SalesPageCopyReport) => {
+      const res = await fetch(`/api/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sales_page_copy: report }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "상세페이지 문구 저장에 실패했습니다.",
+        );
+      }
+      const data = await res.json();
+      const normalized = normalizeBookReaderFields(data.book);
+      setBook((b) => ({ ...b, ...normalized }));
+      setSalesCopyReport(normalized.sales_page_copy);
+    },
+    [bookId],
+  );
+
+  const runSalesPageCopy = useCallback(async () => {
+    setSalesLoading(true);
+    setSalesError(null);
+    setSalesProvider(null);
+    setSalesChaptersAnalyzed(null);
+
+    try {
+      await flushActiveChapter();
+
+      const res = await fetch("/api/sales-page-copy", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookId,
+          bookTitle: book.title,
+          bookSubtitle: book.subtitle,
+          readerAnalysis: readerReport ?? undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "상세페이지 문구 생성에 실패했습니다.",
+        );
+      }
+
+      const report = data.report as SalesPageCopyReport;
+      await saveSalesPageCopy(report);
+      setSalesCopyReport(report);
+      setSalesProvider(data.provider ?? null);
+      setSalesChaptersAnalyzed(
+        typeof data.chaptersAnalyzed === "number" ? data.chaptersAnalyzed : null,
+      );
+      setSalesPanelOpen(true);
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "상세페이지 문구 생성에 실패했습니다.";
+      setSalesError(
+        msg.includes("저장")
+          ? `${msg} (화면에만 보일 수 있음 — 「전체 저장」 또는 다시 시도해 주세요.)`
+          : msg,
+      );
+    } finally {
+      setSalesLoading(false);
+    }
+  }, [
+    book.subtitle,
+    book.title,
+    bookId,
+    flushActiveChapter,
+    readerReport,
+    saveSalesPageCopy,
+  ]);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -830,13 +927,21 @@ export function EditorWorkspace({
 
   const updateCoverPath = useCallback(
     async (coverPath: string | null, previewUrl: string | null) => {
-      setBook((b) => ({ ...b, cover_path: coverPath }));
-      setCoverImageUrl(previewUrl);
-      await fetch(`/api/books/${bookId}`, {
+      const res = await fetch(`/api/books/${bookId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cover_path: coverPath }),
       });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "표지 정보 저장에 실패했습니다.",
+        );
+      }
+      setBook((b) => ({ ...b, cover_path: coverPath }));
+      setCoverImageUrl(previewUrl);
     },
     [bookId],
   );
@@ -1104,38 +1209,70 @@ export function EditorWorkspace({
 
   const publish = async () => {
     setPublishing(true);
-    setMessage("");
-    const saved = await saveAll();
-    if (!saved) {
+    setMessage("출판 중… (EPUB·PDF 생성, 책이 길면 1~2분 걸릴 수 있습니다)");
+    const controller = new AbortController();
+    const abortTimer = window.setTimeout(() => controller.abort(), 240_000);
+
+    try {
+      const saved = await saveAll();
+      if (!saved) {
+        setMessage(
+          "저장에 실패해 출판을 중단했습니다. 「전체 저장」 후 다시 출판해 주세요.",
+        );
+        return;
+      }
+
+      const res = await fetch(`/api/publish/${bookId}`, {
+        method: "POST",
+        signal: controller.signal,
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        book?: typeof book;
+        readerUrl?: string;
+        pdfReady?: boolean;
+        pdfError?: string;
+      };
+
+      if (!res.ok || data.error) {
+        setMessage(
+          data.error ??
+            (res.status >= 500
+              ? "출판 서버 오류가 발생했습니다. 잠시 후 다시 시도해 주세요."
+              : "출판에 실패했습니다."),
+        );
+        return;
+      }
+
+      setBook(data.book);
+      const title = (data.book?.title ?? book.title).trim() || "제목 없음";
+      const pdfLine = data.pdfReady
+        ? "PDF도 생성되었습니다. 상단 「PDF 받기」로 내려받을 수 있습니다."
+        : data.pdfError
+          ? `PDF 생성 실패(웹·EPUB 출판은 완료): ${data.pdfError}`
+          : "";
+      setMessage(
+        [
+          `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.`,
+          data.readerUrl ?? "",
+          pdfLine,
+        ]
+          .filter(Boolean)
+          .join("\n"),
+      );
+    } catch (err) {
+      const aborted = err instanceof Error && err.name === "AbortError";
+      setMessage(
+        aborted
+          ? "출판 요청 시간이 초과되었습니다. 서버 터미널 로그를 확인하거나 잠시 후 다시 시도해 주세요."
+          : err instanceof Error
+            ? err.message
+            : "출판 중 오류가 발생했습니다.",
+      );
+    } finally {
+      window.clearTimeout(abortTimer);
       setPublishing(false);
-      setMessage("저장에 실패해 출판을 중단했습니다. 「전체 저장」 후 다시 출판해 주세요.");
-      return;
     }
-    const res = await fetch(`/api/publish/${bookId}`, { method: "POST" });
-    const data = await res.json();
-    setPublishing(false);
-
-    if (data.error) {
-      setMessage(data.error);
-      return;
-    }
-
-    setBook(data.book);
-    const title = (data.book?.title ?? book.title).trim() || "제목 없음";
-    const pdfLine = data.pdfReady
-      ? "PDF도 생성되었습니다. 상단 「PDF 받기」로 내려받을 수 있습니다."
-      : data.pdfError
-        ? `PDF 생성 실패(웹·EPUB 출판은 완료): ${data.pdfError}`
-        : "";
-    setMessage(
-      [
-        `「${title}」 출판 완료! 독자 링크는 그대로이며 내용만 갱신됩니다.`,
-        data.readerUrl ?? "",
-        pdfLine,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    );
   };
 
   useEffect(() => {
@@ -1307,7 +1444,10 @@ export function EditorWorkspace({
           type="button"
           onClick={() => {
             setVersionsPanelOpen((o) => !o);
-            if (!versionsPanelOpen) setReaderPanelOpen(false);
+            if (!versionsPanelOpen) {
+              setReaderPanelOpen(false);
+              setSalesPanelOpen(false);
+            }
           }}
           aria-pressed={versionsPanelOpen}
           className={`rounded-lg border px-4 py-2 text-sm font-medium ${
@@ -1320,7 +1460,10 @@ export function EditorWorkspace({
         </button>
         <button
           type="button"
-          onClick={() => setReaderPanelOpen((open) => !open)}
+          onClick={() => {
+            setReaderPanelOpen((open) => !open);
+            if (!readerPanelOpen) setSalesPanelOpen(false);
+          }}
           title="타겟 독자 분석 패널 열기/닫기"
           aria-pressed={readerPanelOpen}
           className={`rounded-lg border px-4 py-2 text-sm font-medium ${
@@ -1330,6 +1473,22 @@ export function EditorWorkspace({
           }`}
         >
           독자
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setSalesPanelOpen((open) => !open);
+            if (!salesPanelOpen) setReaderPanelOpen(false);
+          }}
+          title="상세페이지 문구 생성 패널"
+          aria-pressed={salesPanelOpen}
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+            salesPanelOpen
+              ? "border-sky-400 bg-sky-100 text-sky-950"
+              : "border-sky-200 bg-sky-50 text-sky-950 hover:bg-sky-100"
+          }`}
+        >
+          상세페이지
         </button>
         <a
           href={`/admin/books/${bookId}/preview`}
@@ -1452,6 +1611,7 @@ export function EditorWorkspace({
               chapterId={activeChapter.id}
               chapterTitle={activeChapter.title}
               bookId={bookId}
+              bookTitle={book.title}
               initialContent={activeChapter.content_json}
               initialContentHtml={activeChapter.content_html}
               initialPageId={activePageByChapter[activeChapter.id]}
@@ -1496,6 +1656,9 @@ export function EditorWorkspace({
               setReaderReport(
                 normalizeBookReaderFields(nextBook).reader_analysis,
               );
+              setSalesCopyReport(
+                normalizeBookReaderFields(nextBook).sales_page_copy,
+              );
               dirtyChapterIdsRef.current.clear();
               chaptersRef.current = nextChapters;
               setChapters(nextChapters);
@@ -1522,6 +1685,16 @@ export function EditorWorkspace({
             includeSample={readerIncludeSample}
             onIncludeSampleChange={setReaderIncludeSample}
             onAnalyze={() => void runReaderAnalysis()}
+          />
+        )}
+        {salesPanelOpen && (
+          <SalesPageCopyPanel
+            report={salesCopyReport}
+            loading={salesLoading}
+            error={salesError}
+            provider={salesProvider}
+            chaptersAnalyzed={salesChaptersAnalyzed}
+            onGenerate={() => void runSalesPageCopy()}
           />
         )}
       </div>

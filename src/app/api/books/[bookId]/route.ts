@@ -9,6 +9,7 @@ import {
 } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
+import { normalizeSalesPageCopyReport } from "@/lib/salesPageCopy/normalize";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
 
@@ -90,6 +91,18 @@ export async function PATCH(request: Request, context: RouteContext) {
       );
     }
     updates.reader_analysis = report;
+  }
+  if (body.sales_page_copy === null) {
+    updates.sales_page_copy = null;
+  } else if (body.sales_page_copy !== undefined) {
+    const copy = normalizeSalesPageCopyReport(body.sales_page_copy);
+    if (!copy) {
+      return NextResponse.json(
+        { error: "sales_page_copy 형식이 올바르지 않습니다." },
+        { status: 400 },
+      );
+    }
+    updates.sales_page_copy = copy;
   }
 
   const { data, error } = await supabase

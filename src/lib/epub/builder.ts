@@ -8,7 +8,6 @@ import {
   buildPageEpubHtml,
 } from "@/lib/typography/pageLayout";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
-import { fetchCoverImageDataUri } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import { epubTypographyCss } from "@/lib/typography/bookStyles";
 
@@ -20,6 +19,15 @@ function writingModeCss(mode: WritingMode) {
     `;
   }
   return `body { writing-mode: horizontal-tb; }`;
+}
+
+/** epub-gen은 data: URI를 fetch할 수 없어 http(s) URL만 사용 */
+function epubHttpCoverUrl(coverUrl?: string | null): string | null {
+  if (!coverUrl) return null;
+  if (coverUrl.startsWith("http://") || coverUrl.startsWith("https://")) {
+    return coverUrl;
+  }
+  return null;
 }
 
 export async function buildEpubBuffer(
@@ -38,9 +46,7 @@ export async function buildEpubBuffer(
 ): Promise<Buffer> {
   const headingFonts = normalizeBookHeadingFonts(book.heading_fonts);
   const coverStyle = normalizeBookCoverStyle(book);
-  const coverImageSrc = coverUrl
-    ? await fetchCoverImageDataUri(coverUrl)
-    : null;
+  const httpCoverUrl = epubHttpCoverUrl(coverUrl);
   const css = epubTypographyCss(writingModeCss(book.writing_mode), headingFonts);
 
   const bookCoverEntry = {
@@ -49,7 +55,7 @@ export async function buildEpubBuffer(
       book.title,
       book.subtitle,
       coverStyle,
-      coverImageSrc ?? coverUrl,
+      httpCoverUrl,
     ),
     excludeFromToc: false,
   };
@@ -83,7 +89,7 @@ export async function buildEpubBuffer(
     author: "Webbook Studio",
     publisher: "Webbook Studio",
     description: book.subtitle ?? undefined,
-    cover: coverUrl ?? undefined,
+    cover: httpCoverUrl ?? undefined,
     css,
     lang: "ko",
     tocTitle: "목차",

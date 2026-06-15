@@ -20,6 +20,7 @@ export type BookVersionBookSnapshot = {
   heading_fonts: Book["heading_fonts"];
   reader_pitch: string;
   reader_analysis: Book["reader_analysis"];
+  sales_page_copy: Book["sales_page_copy"];
 };
 
 export type BookVersionSnapshot = {
@@ -57,6 +58,7 @@ export function buildBookVersionSnapshot(
       heading_fonts: normalized.heading_fonts,
       reader_pitch: normalized.reader_pitch,
       reader_analysis: normalized.reader_analysis,
+      sales_page_copy: normalized.sales_page_copy,
     },
     chapters: [...chapters]
       .sort((a, b) => a.sort_order - b.sort_order)

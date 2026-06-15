@@ -3,7 +3,7 @@ import {
   type ReaderScrollPage,
 } from "@/lib/reader/buildBookScrollDocument";
 import type { Book, Chapter } from "@/lib/types/database";
-import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
+import { resolveBookCoverEmbedSrc } from "@/lib/books/resolveCoverImageUrl";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 
 type ScrollResult =
@@ -50,10 +50,9 @@ export async function loadDraftBookScrollData(
     return { ok: false, error: "미리볼 챕터가 없습니다.", status: 400 };
   }
 
-  const coverImageUrl = await resolveBookCoverSignedUrl(
+  const coverImageUrl = await resolveBookCoverEmbedSrc(
     supabase.storage,
     book.cover_path,
-    3600,
   );
   const { bodyHtml, toc, pages } = buildBookScrollDocument(
     book,
@@ -94,11 +93,9 @@ export async function loadPublishedBookScrollData(
     return { ok: false, error: "챕터가 없습니다.", status: 404 };
   }
 
-  const coverImageUrl = await resolveBookCoverSignedUrl(
-    service.storage,
-    book.cover_path,
-    3600,
-  );
+  const coverImageUrl = book.cover_path
+    ? await resolveBookCoverEmbedSrc(service.storage, book.cover_path)
+    : null;
   const { bodyHtml, toc, pages } = buildBookScrollDocument(
     book,
     chapters,

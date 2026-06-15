@@ -18,6 +18,7 @@ export async function applyBookVersionSnapshot(
       heading_fonts: snapshot.book.heading_fonts,
       reader_pitch: snapshot.book.reader_pitch,
       reader_analysis: snapshot.book.reader_analysis,
+      sales_page_copy: snapshot.book.sales_page_copy ?? null,
     })
     .eq("id", bookId);
 

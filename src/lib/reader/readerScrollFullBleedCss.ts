@@ -1,5 +1,6 @@
 import {
   BOOK_PAGE_HEIGHT_VAR,
+  bookCoverImagePageCss,
   bookPageBodyClass,
   bookPageClass,
   bookPageContentClass,
@@ -88,6 +89,7 @@ export function readerScrollFullBleedCss() {
     ${readerScrollContentPageBoxCss()}
     ${readerScrollQuotePageBoxCss()}
     ${bookPageScrollSplashPageCss(SURFACE, true)}
+    ${bookCoverImagePageCss(SURFACE, true)}
     ${SCROLL} {
       background-color: #ffffff${i};
     }

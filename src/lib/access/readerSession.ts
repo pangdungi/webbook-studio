@@ -48,10 +48,15 @@ export function readerScrollPath(token: string) {
   return `/read/${token}/scroll`;
 }
 
+export function readerCoverPath(token: string) {
+  return `/read/${token}/cover`;
+}
+
 /** 독자 세션일 때 이 토큰의 책 경로만 허용 */
 export function isReaderPathForToken(pathname: string, token: string): boolean {
   if (pathname === readerBookPath(token)) return true;
   if (pathname === readerEpubPath(token)) return true;
   if (pathname === readerScrollPath(token)) return true;
+  if (pathname === readerCoverPath(token)) return true;
   return false;
 }

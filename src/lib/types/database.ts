@@ -1,5 +1,6 @@
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
+import type { SalesPageCopyReport } from "@/lib/salesPageCopy/types";
 
 export type UserRole = "admin" | "reader";
 export type BookStatus = "draft" | "published";
@@ -27,6 +28,7 @@ export type Book = {
   published_at: string | null;
   reader_pitch: string;
   reader_analysis: ReaderAnalysisReport | null;
+  sales_page_copy: SalesPageCopyReport | null;
   created_by: string;
   created_at: string;
   updated_at: string;
