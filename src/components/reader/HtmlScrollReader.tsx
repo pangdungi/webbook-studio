@@ -19,6 +19,7 @@ import {
 import type { ReaderViewMode } from "@/lib/reader/viewMode";
 import {
   bookPageShellClass,
+  READER_SCROLL_CONTENT_MAX_WIDTH,
   syncBookPageMetrics,
   syncReaderViewportVars,
 } from "@/lib/pages/bookPageCss";
@@ -371,14 +372,16 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       forceScrollRelayoutRef.current = false;
       lastScrollLayoutWidthRef.current = layoutW;
 
-      viewport.style.backgroundColor = "#ffffff";
+      viewport.style.backgroundColor = "#fafaf9";
       viewport.style.removeProperty(READER_SLIDE_W_VAR);
       surface.style.transform = "";
       surface.style.transition = "";
       surface.style.removeProperty(READER_SLIDE_W_VAR);
       surface.style.width = "100%";
-      surface.style.maxWidth = "none";
-      surface.style.margin = "0";
+      surface.style.maxWidth = READER_SCROLL_CONTENT_MAX_WIDTH;
+      surface.style.minWidth = "0";
+      surface.style.marginLeft = "auto";
+      surface.style.marginRight = "auto";
       viewport.scrollLeft = 0;
 
       applyScrollFullBleedLayout(surface, w);

@@ -25,7 +25,11 @@ import {
   type HeadingFontRole,
 } from "@/lib/typography/headingFonts";
 import { parseChapterContent } from "@/lib/pages/content";
-import { withPageDone, withPageMemo } from "@/lib/pages/chapterEditorMeta";
+import {
+  withAllPagesDone,
+  withPageDone,
+  withPageMemo,
+} from "@/lib/pages/chapterEditorMeta";
 import {
   chaptersWithChangedPages,
   movePageByDrag,
@@ -235,19 +239,35 @@ export function EditorWorkspace({
     void (async () => {
       try {
         const pulled = await pullAllChaptersFromServer();
-        chaptersRef.current = pulled;
-        setChapters(pulled);
-        dirtyChapterIdsRef.current.clear();
-        setChapterEditorKey((k) => k + 1);
-        const first = pulled[0];
-        if (first) {
+        const dirty = dirtyChapterIdsRef.current;
+        const prev = chaptersRef.current;
+        const activeId = activeChapterId;
+        const next = pulled.map((serverCh) => {
+          const local = prev.find((c) => c.id === serverCh.id);
+          if (local && dirty.has(serverCh.id)) return local;
+          return serverCh;
+        });
+        chaptersRef.current = next;
+        setChapters(next);
+
+        const activeKeptLocal =
+          !!activeId && dirty.has(activeId);
+        if (!activeKeptLocal) {
+          setChapterEditorKey((k) => k + 1);
+        }
+
+        const first = next[0];
+        if (first && !activeKeptLocal) {
           setActiveChapterId(first.id);
           const pageId = defaultPageIdForChapter(first);
           if (pageId) {
             setActivePageByChapter({ [first.id]: pageId });
           }
         }
-        setSaveState("saved");
+
+        if (dirty.size === 0) {
+          setSaveState("saved");
+        }
       } catch (err) {
         const detail =
           err instanceof Error
@@ -301,62 +321,6 @@ export function EditorWorkspace({
       });
     },
     [markChapterDirty],
-  );
-
-  const togglePageDone = useCallback(
-    (chapterId: string, pageId: string, done: boolean) => {
-      markChapterDirty(chapterId);
-      setChapters((prev) => {
-        const next = prev.map((c) =>
-          c.id === chapterId
-            ? {
-                ...c,
-                content_json: withPageDone(
-                  c.content_json,
-                  pageId,
-                  done,
-                  c.title,
-                  c.content_html,
-                ),
-              }
-            : c,
-        );
-        chaptersRef.current = next;
-        return next;
-      });
-      if (chapterId === activeChapterId) {
-        editorRef.current?.setPageDone(pageId, done);
-      }
-    },
-    [activeChapterId, markChapterDirty],
-  );
-
-  const setPageMemo = useCallback(
-    (chapterId: string, pageId: string, memo: string) => {
-      markChapterDirty(chapterId);
-      setChapters((prev) => {
-        const next = prev.map((c) =>
-          c.id === chapterId
-            ? {
-                ...c,
-                content_json: withPageMemo(
-                  c.content_json,
-                  pageId,
-                  memo,
-                  c.title,
-                  c.content_html,
-                ),
-              }
-            : c,
-        );
-        chaptersRef.current = next;
-        return next;
-      });
-      if (chapterId === activeChapterId) {
-        editorRef.current?.setPageMemo(pageId, memo);
-      }
-    },
-    [activeChapterId, markChapterDirty],
   );
 
   const saveChapter = useCallback(
@@ -427,6 +391,116 @@ export function EditorWorkspace({
       })();
     },
     [markChapterDirty, saveChapter],
+  );
+
+  const persistChapterFromRef = useCallback(
+    (chapterId: string) => {
+      const ch = chaptersRef.current.find((c) => c.id === chapterId);
+      if (!ch) return;
+      persistChapterInBackground(chapterId, {
+        chapterId,
+        contentJson: ch.content_json,
+        contentHtml: ch.content_html ?? "",
+      });
+    },
+    [persistChapterInBackground],
+  );
+
+  const togglePageDone = useCallback(
+    (chapterId: string, pageId: string, done: boolean) => {
+      markChapterDirty(chapterId);
+      setSaveState("pending");
+      setChapters((prev) => {
+        const next = prev.map((c) =>
+          c.id === chapterId
+            ? {
+                ...c,
+                content_json: withPageDone(
+                  c.content_json,
+                  pageId,
+                  done,
+                  c.title,
+                  c.content_html,
+                ),
+              }
+            : c,
+        );
+        chaptersRef.current = next;
+        return next;
+      });
+      if (chapterId === activeChapterId) {
+        editorRef.current?.setPageDone(pageId, done);
+      } else {
+        persistChapterFromRef(chapterId);
+      }
+    },
+    [activeChapterId, markChapterDirty, persistChapterFromRef],
+  );
+
+  const clearAllPageDone = useCallback(() => {
+    for (const c of chaptersRef.current) {
+      markChapterDirty(c.id);
+    }
+    setSaveState("pending");
+    setChapters((prev) => {
+      const next = prev.map((c) => ({
+        ...c,
+        content_json: withAllPagesDone(
+          c.content_json,
+          false,
+          c.title,
+          c.content_html,
+        ),
+      }));
+      chaptersRef.current = next;
+      return next;
+    });
+    const active = chaptersRef.current.find((c) => c.id === activeChapterId);
+    if (active && editorRef.current) {
+      editorRef.current.setAllPagesDone(false);
+    } else if (active) {
+      persistChapterFromRef(activeChapterId);
+    }
+    for (const c of chaptersRef.current) {
+      if (c.id === activeChapterId) continue;
+      persistChapterFromRef(c.id);
+    }
+  }, [
+    activeChapterId,
+    markChapterDirty,
+    persistChapterFromRef,
+    persistChapterInBackground,
+  ]);
+
+  const setPageMemo = useCallback(
+    (chapterId: string, pageId: string, memo: string) => {
+      markChapterDirty(chapterId);
+      setSaveState("pending");
+      setChapters((prev) => {
+        const next = prev.map((c) =>
+          c.id === chapterId
+            ? {
+                ...c,
+                content_json: withPageMemo(
+                  c.content_json,
+                  pageId,
+                  memo,
+                  c.title,
+                  c.content_html,
+                ),
+              }
+            : c,
+        );
+        chaptersRef.current = next;
+        return next;
+      });
+      if (chapterId === activeChapterId) {
+        editorRef.current?.setPageMemo(pageId, memo);
+      } else {
+        persistChapterFromRef(chapterId);
+      }
+    },
+    [activeChapterId, markChapterDirty, persistChapterFromRef],
   );
 
   const applyFlushedChapter = useCallback(
@@ -1576,6 +1650,7 @@ export function EditorWorkspace({
           onOpenChapter={openChapterLocal}
           onSelectPage={selectChapterPage}
           onTogglePageDone={togglePageDone}
+          onClearAllPageDone={clearAllPageDone}
           onPageMemoChange={setPageMemo}
           onAdd={addChapter}
           onDelete={(id) => void deleteChapter(id)}

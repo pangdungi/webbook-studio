@@ -150,6 +150,7 @@ export type BookEditorHandle = {
   };
   selectPage: (pageId: string) => void;
   setPageDone: (pageId: string, done: boolean) => void;
+  setAllPagesDone: (done: boolean) => void;
   setPageMemo: (pageId: string, memo: string) => void;
 };
 
@@ -1267,11 +1268,30 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         const next = prev.map((p) =>
           p.id === pageId ? { ...p, editor_done: done } : p,
         );
-        queueMicrotask(() => rememberLocalChapter(next));
+        queueMicrotask(() => {
+          rememberLocalChapter(next);
+          void pushCurrentChapterToServer();
+        });
         return next;
       });
     },
-    [rememberLocalChapter],
+    [pushCurrentChapterToServer, rememberLocalChapter],
+  );
+
+  const setAllPagesDone = useCallback(
+    (done: boolean) => {
+      setPages((prev) => {
+        const next = prev.map((p) =>
+          p.kind === "chapter-cover" ? p : { ...p, editor_done: done },
+        );
+        queueMicrotask(() => {
+          rememberLocalChapter(next);
+          void pushCurrentChapterToServer();
+        });
+        return next;
+      });
+    },
+    [pushCurrentChapterToServer, rememberLocalChapter],
   );
 
   const setPageMemo = useCallback(
@@ -1280,11 +1300,14 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         const next = prev.map((p) =>
           p.id === pageId ? { ...p, editor_memo: memo } : p,
         );
-        queueMicrotask(() => rememberLocalChapter(next));
+        queueMicrotask(() => {
+          rememberLocalChapter(next);
+          void pushCurrentChapterToServer();
+        });
         return next;
       });
     },
-    [rememberLocalChapter],
+    [pushCurrentChapterToServer, rememberLocalChapter],
   );
 
   const openPageMemoDialog = useCallback(
@@ -1319,9 +1342,10 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         selectPageRef.current(pageId);
       },
       setPageDone,
+      setAllPagesDone,
       setPageMemo,
     }),
-    [commitChapterSnapshot, flushPendingSave, setPageDone, setPageMemo],
+    [commitChapterSnapshot, flushPendingSave, setAllPagesDone, setPageDone, setPageMemo],
   );
 
   const addPage = (kind: Extract<PageKind, "content" | "quote">) => {

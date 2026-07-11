@@ -60,6 +60,20 @@ export function withPageDone(
   return chapterContentToJson(pages) as unknown as Record<string, unknown>;
 }
 
+/** 장 안 검수 대상 페이지 — 전체 완료/해제 */
+export function withAllPagesDone(
+  contentJson: Record<string, unknown>,
+  done: boolean,
+  chapterTitle?: string,
+  contentHtml?: string,
+): Record<string, unknown> {
+  const parsed = parseChapterContent(contentJson, chapterTitle, contentHtml);
+  const pages = parsed.pages.map((p) =>
+    p.kind === "chapter-cover" ? p : { ...p, editor_done: done },
+  );
+  return chapterContentToJson(pages) as unknown as Record<string, unknown>;
+}
+
 export function withPageMemo(
   contentJson: Record<string, unknown>,
   pageId: string,

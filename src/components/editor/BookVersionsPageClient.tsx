@@ -109,6 +109,7 @@ export function BookVersionsPageClient({
             onOpenChapter={setActiveChapterId}
             onSelectPage={() => {}}
             onTogglePageDone={() => {}}
+            onClearAllPageDone={() => {}}
             onPageMemoChange={() => {}}
             onAdd={() => {}}
             onDelete={() => {}}

@@ -2,6 +2,8 @@ import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
 
 /** A4 기준 — 210×297mm, 편집·EPUB·리더 동일 페이지 크기 */
 export const BOOK_PAGE_REF_WIDTH = "42rem";
+/** 스크롤 리더 — 넓은 화면에서 본문이 더 이상 늘어나지 않는 최대 너비 */
+export const READER_SCROLL_CONTENT_MAX_WIDTH = BOOK_PAGE_REF_WIDTH;
 export const BOOK_PAGE_ASPECT = "297 / 210";
 /** 이미지 표지 — 본문 페이지보다 작게, 책 한 권 크기 */
 export const BOOK_COVER_IMAGE_MAX_WIDTH = "min(100%, 22rem)";
@@ -432,7 +434,7 @@ export function bookPageReaderScrollLayoutCss(important = false) {
   `;
 }
 
-/** HTML 스크롤 리더 — 뷰포트 안에서만, 페이지 가로 100% (672px·auto 마진 없음) */
+/** HTML 스크롤 리더 — 표면 max-width 안에서 페이지 가로 100% */
 export function bookPageHtmlScrollLayoutCss(important = false) {
   const scope = ".reader-scroll-viewport--scroll .reader-scroll-surface";
   const i = important ? " !important" : "";
@@ -440,8 +442,8 @@ export function bookPageHtmlScrollLayoutCss(important = false) {
   return `
     ${scope} .${bookPageShellClass} {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin-left: 0${i};
       margin-right: 0${i};
       flex-shrink: 0${i};
@@ -457,8 +459,8 @@ export function bookPageHtmlScrollLayoutCss(important = false) {
     }
     ${scope} .${bookPageShellClass} .${bookPageClass} {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin-left: 0${i};
       margin-right: 0${i};
     }
@@ -475,8 +477,8 @@ export function bookPageHtmlScrollLayoutCss(important = false) {
     }
     ${scope} .${bookPageShellSplashClass} .${bookPageClass}:not(.${bookPageBookCoverImageClass}) {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
       min-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};
       max-height: var(${BOOK_PAGE_HEIGHT_VAR}, var(${READER_VIEWPORT_H_VAR}, 100dvh))${i};

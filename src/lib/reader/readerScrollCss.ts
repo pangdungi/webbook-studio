@@ -13,6 +13,7 @@ import {
   bookPageShellClass,
   bookPageShellFlowClass,
   bookPageShellSplashClass,
+  READER_SCROLL_CONTENT_MAX_WIDTH,
 } from "@/lib/pages/bookPageCss";
 import { readerPaginateMeasureCss } from "@/lib/reader/paginateFlowPages";
 import { readerScrollFullBleedCss } from "@/lib/reader/readerScrollFullBleedCss";
@@ -119,13 +120,15 @@ export function readerScrollSurfaceCss(
       overflow-y: auto${i};
       overflow-anchor: none${i};
       touch-action: pan-y${i};
-      background-color: #ffffff${i};
+      background-color: #fafaf9${i};
     }
     .reader-scroll-surface--scroll {
       flex-direction: column${i};
       width: 100%${i};
-      max-width: none${i};
-      margin: 0${i};
+      max-width: ${READER_SCROLL_CONTENT_MAX_WIDTH}${i};
+      min-width: 0${i};
+      margin-left: auto${i};
+      margin-right: auto${i};
       min-height: min-content${i};
       height: auto${i};
     }
@@ -162,7 +165,7 @@ export function readerScrollSurfaceCss(
       max-height: 100%${i};
       -webkit-overflow-scrolling: touch${i};
       overscroll-behavior: auto${i};
-      background-color: #ffffff${i};
+      background-color: #fafaf9${i};
       scrollbar-width: none${i};
       -ms-overflow-style: none${i};
     }

@@ -39,7 +39,7 @@ import {
 } from "@/lib/editor/sidebarDropInsertion";
 import { sidebarCollisionDetection } from "@/lib/editor/sidebarCollisionDetection";
 import { parseChapterContent } from "@/lib/pages/content";
-import { chapterPageDoneStats } from "@/lib/pages/chapterEditorMeta";
+import { chapterPageDoneStats, trackablePages } from "@/lib/pages/chapterEditorMeta";
 import {
   chapterDragId,
   chapterDropZoneId,
@@ -75,6 +75,7 @@ type Props = {
   onOpenChapter: (id: string) => void;
   onSelectPage: (chapterId: string, pageId: string) => void;
   onTogglePageDone: (chapterId: string, pageId: string, done: boolean) => void;
+  onClearAllPageDone: () => void;
   onPageMemoChange: (chapterId: string, pageId: string, memo: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
@@ -493,6 +494,7 @@ export function ChapterSidebar({
   onOpenChapter,
   onSelectPage,
   onTogglePageDone,
+  onClearAllPageDone,
   onPageMemoChange,
   onAdd,
   onDelete,
@@ -527,6 +529,19 @@ export function ChapterSidebar({
 
   const { firstPageByChapter, lastPageByChapter } = useMemo(
     () => buildPageBoundsMaps(chapters),
+    [chapters],
+  );
+
+  const hasAnyPageDone = useMemo(
+    () =>
+      chapters.some((chapter) => {
+        const parsed = parseChapterContent(
+          chapter.content_json,
+          chapter.title,
+          chapter.content_html,
+        );
+        return trackablePages(parsed.pages).some((p) => p.editor_done);
+      }),
     [chapters],
   );
 
@@ -779,15 +794,26 @@ export function ChapterSidebar({
 
   return (
     <aside className="flex w-72 shrink-0 flex-col border-r border-stone-200 bg-white">
-      <div className="flex items-center justify-between px-3 py-2.5 text-sm font-medium text-stone-700">
+      <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-stone-700">
         <span>목차</span>
-        <button
-          type="button"
-          onClick={onAdd}
-          className="text-sm text-stone-600 hover:text-stone-900"
-        >
-          + 장
-        </button>
+        <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onClearAllPageDone}
+            disabled={!hasAnyPageDone}
+            className="text-xs text-stone-500 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+            title="모든 페이지 작성·검수 완료 체크 해제"
+          >
+            완료 해제
+          </button>
+          <button
+            type="button"
+            onClick={onAdd}
+            className="text-sm text-stone-600 hover:text-stone-900"
+          >
+            + 장
+          </button>
+        </div>
       </div>
 
       <button

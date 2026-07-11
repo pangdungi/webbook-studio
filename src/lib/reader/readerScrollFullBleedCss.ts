@@ -1,5 +1,6 @@
 import {
   BOOK_PAGE_HEIGHT_VAR,
+  READER_SCROLL_CONTENT_MAX_WIDTH,
   bookCoverImageClass,
   bookCoverImagePageCss,
   bookPageBodyClass,
@@ -28,8 +29,8 @@ function readerScrollQuotePageBoxCss() {
     ${p}.${bookPageClass}.${bookPageQuoteClass} {
       box-sizing: border-box${i};
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin: 0${i};
       padding: 2.5rem clamp(1rem, 4vw, 1.5rem)${i};
       background-color: #ffffff${i};
@@ -48,7 +49,7 @@ function readerScrollQuotePageBoxCss() {
   `;
 }
 
-/** 스크롤 본문 장 — 가로 100%, 좌우는 글 읽기용 최소 패딩만 */
+/** 스크롤 본문 장 — 읽기 열 너비 안에서 100% */
 function readerScrollContentPageBoxCss() {
   const p = `${SURFACE} `;
   const i = " !important";
@@ -57,8 +58,8 @@ function readerScrollContentPageBoxCss() {
     ${p}.${bookPageClass}.${bookPageContentClass} {
       box-sizing: border-box${i};
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin: 0${i};
       padding: 2.5rem clamp(1rem, 4vw, 1.5rem)${i};
       background-color: #ffffff${i};
@@ -76,7 +77,8 @@ function readerScrollContentPageBoxCss() {
     ${p}.${bookPageClass}.${bookPageContentClass} .${bookPageBodyClass} {
       box-sizing: border-box${i};
       width: 100%${i};
-      max-width: none${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       height: auto${i};
       max-height: none${i};
       overflow: visible${i};
@@ -84,7 +86,7 @@ function readerScrollContentPageBoxCss() {
   `;
 }
 
-/** 스크롤 모드 — 페이지 모드와 동일하게 화면 가로 전체 */
+/** 스크롤 모드 — 넓은 화면에서 최대 ${READER_SCROLL_CONTENT_MAX_WIDTH} 열, 양옆 여백 */
 export function readerScrollFullBleedCss() {
   const i = " !important";
 
@@ -112,13 +114,21 @@ export function readerScrollFullBleedCss() {
       max-width: min(100%, 22rem)${i};
     }
     ${SCROLL} {
-      background-color: #ffffff${i};
+      background-color: #fafaf9${i};
     }
-    ${SURFACE},
+    ${SURFACE} {
+      width: 100%${i};
+      max-width: ${READER_SCROLL_CONTENT_MAX_WIDTH}${i};
+      min-width: 0${i};
+      margin-left: auto${i};
+      margin-right: auto${i};
+      padding: 0${i};
+      align-items: stretch${i};
+    }
     ${SCROLL} .reader-scroll-anchor {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin: 0${i};
       padding: 0${i};
       align-items: stretch${i};
@@ -127,8 +137,8 @@ export function readerScrollFullBleedCss() {
     ${SURFACE} .${bookPageShellSplashClass},
     ${SURFACE} .${bookPageShellFlowClass} {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin: 0${i};
       padding: 0${i};
       gap: 0${i};
@@ -138,32 +148,37 @@ export function readerScrollFullBleedCss() {
     ${SURFACE} .${bookPageShellSplashClass} .${bookPageClass}:not(.${bookPageBookCoverImageClass}),
     ${SURFACE} .${bookPageShellFlowClass} .${bookPageClass} {
       width: 100%${i};
-      max-width: none${i};
-      min-width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
       margin: 0${i};
     }
   `;
 }
 
 /** CSS 캐시·구버전 덮어쓰기 — 스크롤 레이아웃 직후 인라인 적용 */
-export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: number) {
-  if (viewportWidth <= 0) return;
-
-  const stretch = (el: HTMLElement) => {
+export function applyScrollFullBleedLayout(root: HTMLElement, _viewportWidth: number) {
+  const fillColumn = (el: HTMLElement) => {
     el.style.setProperty("width", "100%");
-    el.style.setProperty("max-width", "none");
-    el.style.setProperty("min-width", "100%");
-    el.style.setProperty("margin", "0");
+    el.style.setProperty("max-width", "100%");
+    el.style.setProperty("min-width", "0");
+    el.style.setProperty("margin-left", "0");
+    el.style.setProperty("margin-right", "0");
   };
 
-  stretch(root);
+  root.style.setProperty("width", "100%");
+  root.style.setProperty("max-width", READER_SCROLL_CONTENT_MAX_WIDTH);
+  root.style.setProperty("min-width", "0");
+  root.style.setProperty("margin-left", "auto");
+  root.style.setProperty("margin-right", "auto");
   root.style.setProperty("align-items", "stretch");
 
-  root.querySelectorAll<HTMLElement>(".reader-scroll-anchor").forEach(stretch);
+  root.querySelectorAll<HTMLElement>(".reader-scroll-anchor").forEach(fillColumn);
+
   root.querySelectorAll<HTMLElement>(`.${bookPageShellClass}`).forEach((shell) => {
-    stretch(shell);
+    fillColumn(shell);
     shell.style.setProperty("--book-page-w", "100%");
   });
+
   root.querySelectorAll<HTMLElement>(`.${bookPageClass}`).forEach((page) => {
     if (page.classList.contains(bookPageBookCoverImageClass)) {
       page.style.removeProperty("min-width");
@@ -173,6 +188,6 @@ export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: num
       page.style.setProperty("margin-right", "auto");
       return;
     }
-    stretch(page);
+    fillColumn(page);
   });
 }
