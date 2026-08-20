@@ -57,6 +57,7 @@ import {
 } from "@/lib/editor/pageZoom";
 import { typographyGuide } from "@/lib/typography/bookStyles";
 import type { BookPage, PageKind } from "@/lib/pages/types";
+import { isAsideContentPage, toggleAsideLayout } from "@/lib/pages/asidePage";
 import {
   getPageSubtitle,
   getPageTocLabel,
@@ -1310,6 +1311,23 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
     [pushCurrentChapterToServer, rememberLocalChapter],
   );
 
+  const toggleActivePageAside = useCallback(() => {
+    const pageId = activePageIdRef.current;
+    const page = pagesRef.current.find((p) => p.id === pageId);
+    if (!page || page.kind !== "content") return;
+
+    setPages((prev) => {
+      const next = prev.map((p) =>
+        p.id === pageId ? toggleAsideLayout(p) : p,
+      );
+      queueMicrotask(() => {
+        rememberLocalChapter(next);
+        void pushCurrentChapterToServer();
+      });
+      return next;
+    });
+  }, [pushCurrentChapterToServer, rememberLocalChapter]);
+
   const openPageMemoDialog = useCallback(
     (pageId: string) => {
       const page = pages.find((p) => p.id === pageId);
@@ -2054,6 +2072,7 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
 
   const pageTabLabel = (page: BookPage) => {
     if (page.kind === "quote") return "명";
+    if (isAsideContentPage(page)) return "보";
     return String(contentPageIndex(page.id) + 1);
   };
 
@@ -2248,12 +2267,16 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
                   <button
                     type="button"
                     onClick={() => selectPage(page.id)}
-                    className={`min-w-[2.25rem] px-2 py-2 text-lg tabular-nums leading-none ${
+                    className={`min-w-[2.25rem] rounded px-2 py-2 text-lg tabular-nums leading-none ${
                       page.kind === "content" ? "font-semibold" : "font-medium"
                     } ${
-                      isActive
-                        ? "text-stone-900"
-                        : "text-stone-700 hover:text-stone-900"
+                      isAsideContentPage(page)
+                        ? isActive
+                          ? "bg-stone-300 text-stone-900"
+                          : "bg-stone-200 text-stone-700 hover:bg-stone-300 hover:text-stone-900"
+                        : isActive
+                          ? "text-stone-900"
+                          : "text-stone-700 hover:text-stone-900"
                     }`}
                   >
                     {pageTabLabel(page)}
@@ -2330,6 +2353,24 @@ export const BookEditor = forwardRef<BookEditorHandle, Props>(function BookEdito
         </div>
         {activePage && activePage.kind !== "chapter-cover" && (
           <div className="flex items-center gap-2 border-t border-stone-100/80 px-3 py-2">
+            {activePage.kind === "content" ? (
+              <button
+                type="button"
+                onClick={toggleActivePageAside}
+                className={`shrink-0 rounded border px-2.5 py-1 text-xs font-medium ${
+                  isAsideContentPage(activePage)
+                    ? "border-stone-400 bg-stone-200 text-stone-900 hover:bg-stone-300"
+                    : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50"
+                }`}
+                title={
+                  isAsideContentPage(activePage)
+                    ? "일반 본문 페이지(명조·흰 배경)로 되돌리기"
+                    : "이 페이지를 어사이드(회색·고딕 보충)로 전환"
+                }
+              >
+                {isAsideContentPage(activePage) ? "본문으로" : "어사이드"}
+              </button>
+            ) : null}
             <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-stone-500">
               <span className="shrink-0 text-stone-400">부제목</span>
               <input

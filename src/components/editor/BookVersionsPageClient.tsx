@@ -113,6 +113,7 @@ export function BookVersionsPageClient({
             onPageMemoChange={() => {}}
             onAdd={() => {}}
             onDelete={() => {}}
+            onPickChapterTitle={() => {}}
             onReorder={() => {}}
             onPageDragEnd={() => {}}
             onPageMoveError={() => {}}

@@ -3,11 +3,13 @@
 import { memo, type RefCallback } from "react";
 import type { Editor } from "@tiptap/react";
 import type { BookPage } from "@/lib/pages/types";
+import { isAsideContentPage } from "@/lib/pages/asidePage";
 import {
   contentDocWithoutLead,
   pageSubtitleEditorDisplay,
 } from "@/lib/pages/pageTitle";
 import {
+  bookPageAsideClass,
   bookPageBodyClass,
   bookPageClass,
   bookPageContentClass,
@@ -32,11 +34,18 @@ export const ContentPageArticle = memo(function ContentPageArticle({
   onImageUploadError,
 }: Props) {
   const subtitle = pageSubtitleEditorDisplay(page);
+  const articleClass = [
+    bookPageClass,
+    bookPageContentClass,
+    isAsideContentPage(page) ? bookPageAsideClass : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
 
   return (
     <article
       ref={pageRef}
-      className={`${bookPageClass} ${bookPageContentClass}`}
+      className={articleClass}
     >
       <div className={bookPageBodyClass}>
         {subtitle.trim() ? (

@@ -235,7 +235,7 @@ export function WebBookReader({
 
         <div
           ref={readerAreaRef}
-          className={`relative min-h-0 min-w-0 flex-1 overflow-hidden ${
+          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
             viewMode === "paginated" ? "touch-pan-x" : "touch-pan-y"
           } ${protectContent ? "select-none" : ""}`}
         >

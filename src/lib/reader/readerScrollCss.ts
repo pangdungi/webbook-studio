@@ -117,9 +117,10 @@ export function readerScrollSurfaceCss(
     : `
     .reader-scroll-viewport--scroll {
       overflow-x: hidden${i};
-      overflow-y: auto${i};
+      overflow-y: scroll${i};
       overflow-anchor: none${i};
       touch-action: pan-y${i};
+      overscroll-behavior-y: contain${i};
       background-color: #fafaf9${i};
     }
     .reader-scroll-surface--scroll {
@@ -156,8 +157,8 @@ export function readerScrollSurfaceCss(
     ${bookFontFaceCss(headingFonts)}
     ${readerPaginateMeasureCss()}
     .reader-scroll-viewport {
-      position: absolute${i};
-      inset: 0${i};
+      position: relative${i};
+      flex: 1 1 auto${i};
       box-sizing: border-box${i};
       width: 100%${i};
       height: 100%${i};

@@ -3,9 +3,14 @@ export const CHAPTER_CONTENT_VERSION = 2;
 
 export type PageKind = "chapter-cover" | "content" | "quote";
 
+/** 본문 페이지 레이아웃 — aside: 회색·고딕 보충 페이지 */
+export type PageLayout = "aside";
+
 export type BookPage = {
   id: string;
   kind: PageKind;
+  /** content 전용 — aside면 어사이드(보충) 스타일 */
+  layout?: PageLayout;
   /** 목차 서브 항목 — 비우면 첫 중·소제목 또는 기본 라벨 */
   title?: string;
   /** TipTap ProseMirror doc */

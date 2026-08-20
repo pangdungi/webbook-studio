@@ -1,8 +1,10 @@
 import {
   BOOK_PAGE_HEIGHT_VAR,
   READER_SCROLL_CONTENT_MAX_WIDTH,
+  bookAsideFontImportCss,
   bookCoverImageClass,
   bookCoverImagePageCss,
+  bookPageAsideClass,
   bookPageBodyClass,
   bookPageBookCoverClass,
   bookPageBookCoverImageClass,
@@ -83,6 +85,15 @@ function readerScrollContentPageBoxCss() {
       max-height: none${i};
       overflow: visible${i};
     }
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} {
+      background-color: #ececea${i};
+      font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif${i};
+      color: #44403c${i};
+    }
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} .${bookPageBodyClass},
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} .book-page-subtitle {
+      font-family: "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif${i};
+    }
   `;
 }
 
@@ -91,6 +102,7 @@ export function readerScrollFullBleedCss() {
   const i = " !important";
 
   return `
+    ${bookAsideFontImportCss()}
     ${readerScrollContentPageBoxCss()}
     ${readerScrollQuotePageBoxCss()}
     ${bookPageScrollSplashPageCss(SURFACE, true)}

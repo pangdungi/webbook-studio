@@ -40,6 +40,7 @@ import {
 import { sidebarCollisionDetection } from "@/lib/editor/sidebarCollisionDetection";
 import { parseChapterContent } from "@/lib/pages/content";
 import { chapterPageDoneStats, trackablePages } from "@/lib/pages/chapterEditorMeta";
+import { isAsideContentPage } from "@/lib/pages/asidePage";
 import {
   chapterDragId,
   chapterDropZoneId,
@@ -48,6 +49,7 @@ import {
   parsePageDragId,
 } from "@/lib/pages/moveChapterPage";
 import { getPageTocLabel } from "@/lib/pages/pageTitle";
+import { formatEditorTocPlainText } from "@/lib/pages/editorTocText";
 import type { Chapter } from "@/lib/types/database";
 
 type SidebarDragKind = "chapter" | "page" | null;
@@ -79,6 +81,7 @@ type Props = {
   onPageMemoChange: (chapterId: string, pageId: string, memo: string) => void;
   onAdd: () => void;
   onDelete: (id: string) => void;
+  onPickChapterTitle: (id: string) => void;
   onReorder: (ids: string[]) => void;
   onPageDragEnd: (
     pageId: string,
@@ -303,13 +306,14 @@ function ChapterPageList({
             page.kind === "content"
               ? getPageTocLabel(page, contentPageIndex++)
               : getPageTocLabel(page, 0);
+          const displayLabel = isAsideContentPage(page) ? `↳ ${label}` : label;
 
           return (
             <SortablePageRow
               key={page.id}
               chapterId={chapter.id}
               pageId={page.id}
-              label={label}
+              label={displayLabel}
               done={!!page.editor_done}
               hasMemo={!!page.editor_memo?.trim()}
               current={activePageId === page.id}
@@ -341,6 +345,7 @@ function ChapterRow({
   onChapterCover,
   onOpenChapter,
   onDelete,
+  onPickChapterTitle,
   dragHandle,
   activePageId,
   onSelectPage,
@@ -353,6 +358,7 @@ function ChapterRow({
   onChapterCover: boolean;
   onOpenChapter: (id: string) => void;
   onDelete: (id: string) => void;
+  onPickChapterTitle: (id: string) => void;
   dragHandle?: ReactNode;
   activePageId: string | null;
   onSelectPage: (chapterId: string, pageId: string) => void;
@@ -376,13 +382,22 @@ function ChapterRow({
             onOpen={onOpenChapter}
           />
           {active ? (
-            <button
-              type="button"
-              onClick={() => onDelete(chapter.id)}
-              className="mt-0.5 shrink-0 rounded border border-red-200/80 px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
-            >
-              장 삭제
-            </button>
+            <div className="mt-0.5 flex shrink-0 gap-1">
+              <button
+                type="button"
+                onClick={() => onPickChapterTitle(chapter.id)}
+                className="rounded border border-violet-200/80 px-2 py-1 text-[11px] font-medium text-violet-800 hover:bg-violet-50"
+              >
+                제목 뽑기
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(chapter.id)}
+                className="rounded border border-red-200/80 px-2 py-1 text-[11px] font-medium text-red-600 hover:bg-red-50"
+              >
+                장 삭제
+              </button>
+            </div>
           ) : null}
         </div>
         <ChapterPageList
@@ -407,6 +422,7 @@ function SortableChapter(props: {
   onTogglePageDone: (chapterId: string, pageId: string, done: boolean) => void;
   onOpenMemo: (chapterId: string, pageId: string, label: string) => void;
   onDelete: (id: string) => void;
+  onPickChapterTitle: (id: string) => void;
 }) {
   const { dragKind, insertion, activeChapterId } = useContext(SidebarDnDUiContext);
   const chapterId = props.chapter.id;
@@ -498,6 +514,7 @@ export function ChapterSidebar({
   onPageMemoChange,
   onAdd,
   onDelete,
+  onPickChapterTitle,
   onReorder,
   onPageDragEnd,
   onPageMoveError,
@@ -521,6 +538,10 @@ export function ChapterSidebar({
     label: string;
   } | null>(null);
   const [memoDraft, setMemoDraft] = useState("");
+  const [tocCopyState, setTocCopyState] = useState<"idle" | "copied" | "error">(
+    "idle",
+  );
+  const tocCopyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const pointerYRef = useRef(0);
   const dragKindRef = useRef<SidebarDragKind>(null);
@@ -544,6 +565,33 @@ export function ChapterSidebar({
       }),
     [chapters],
   );
+
+  const copyTocText = useCallback(async () => {
+    const text = formatEditorTocPlainText(chapters);
+    if (!text.trim()) {
+      setTocCopyState("error");
+      return;
+    }
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setTocCopyState("copied");
+    } catch {
+      setTocCopyState("error");
+    }
+
+    if (tocCopyTimerRef.current) clearTimeout(tocCopyTimerRef.current);
+    tocCopyTimerRef.current = setTimeout(() => {
+      setTocCopyState("idle");
+      tocCopyTimerRef.current = null;
+    }, 2000);
+  }, [chapters]);
+
+  useEffect(() => {
+    return () => {
+      if (tocCopyTimerRef.current) clearTimeout(tocCopyTimerRef.current);
+    };
+  }, []);
 
   const dndUi = useMemo<SidebarDnDUi>(
     () => ({
@@ -784,6 +832,7 @@ export function ChapterSidebar({
       onTogglePageDone,
       onOpenMemo: openPageMemo,
       onDelete,
+      onPickChapterTitle,
     };
     return dndReady ? (
       <SortableChapter key={chapter.id} {...common} />
@@ -797,6 +846,19 @@ export function ChapterSidebar({
       <div className="flex items-center justify-between gap-2 px-3 py-2.5 text-sm font-medium text-stone-700">
         <span>목차</span>
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void copyTocText()}
+            disabled={chapters.length === 0}
+            className="text-xs text-stone-500 hover:text-stone-800 disabled:cursor-not-allowed disabled:opacity-40"
+            title="목차를 텍스트로 클립보드에 복사"
+          >
+            {tocCopyState === "copied"
+              ? "복사됨"
+              : tocCopyState === "error"
+                ? "복사 실패"
+                : "목차 복사"}
+          </button>
           <button
             type="button"
             onClick={onClearAllPageDone}

@@ -92,6 +92,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     const lastPaginatedWidthRef = useRef(0);
     /** 탭·주소창 resize 시 --wbs-reader-vh 변동 방지 (스플래시 높이 줄며 scroll 튐) */
     const lockedScrollVhRef = useRef(0);
+    const touchScrollingRef = useRef(false);
     const menuOpenRef = useRef(menuOpen);
     const onReadingAreaTapRef = useRef(onReadingAreaTap);
     const saveProgressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -563,6 +564,8 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
 
         syncScrollViewportVars(viewport, surface, w, h);
 
+        if (touchScrollingRef.current) return;
+
         const pinned = lastKnownScrollTopRef.current;
         if (pinned > 0 && Math.abs(viewport.scrollTop - pinned) > 8) {
           pinScrollTop(pinned);
@@ -570,9 +573,42 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       };
       window.addEventListener("resize", onWindowResize);
 
+      const vv = window.visualViewport;
+      const onVisualViewportChange = () => {
+        if (paginated) return;
+        onWindowResize();
+      };
+      vv?.addEventListener("resize", onVisualViewportChange);
+      vv?.addEventListener("scroll", onVisualViewportChange);
+
+      const onTouchStart = () => {
+        touchScrollingRef.current = true;
+      };
+      const onTouchEnd = () => {
+        touchScrollingRef.current = false;
+        if (!paginated && viewport) {
+          lastKnownScrollTopRef.current = viewport.scrollTop;
+        }
+      };
+      viewport.addEventListener("touchstart", onTouchStart, { passive: true });
+      viewport.addEventListener("touchend", onTouchEnd, { passive: true });
+      viewport.addEventListener("touchcancel", onTouchEnd, { passive: true });
+
+      const ro = new ResizeObserver(() => {
+        if (viewport.clientWidth <= 0 || viewport.clientHeight <= 0) return;
+        syncLayout();
+      });
+      ro.observe(viewport);
+
       return () => {
         detachTap();
         window.removeEventListener("resize", onWindowResize);
+        vv?.removeEventListener("resize", onVisualViewportChange);
+        vv?.removeEventListener("scroll", onVisualViewportChange);
+        viewport.removeEventListener("touchstart", onTouchStart);
+        viewport.removeEventListener("touchend", onTouchEnd);
+        viewport.removeEventListener("touchcancel", onTouchEnd);
+        ro.disconnect();
       };
     }, [bodyHtml, paginated, protectContent, syncLayout, pinScrollTop, syncScrollViewportVars]);
 
@@ -629,7 +665,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     return (
       <div
         ref={viewportRef}
-        className={`reader-scroll-viewport reader-hide-scrollbar${
+        className={`reader-scroll-viewport reader-hide-scrollbar min-h-0 h-full flex-1${
           paginated
             ? " reader-scroll-viewport--paginated"
             : " reader-scroll-viewport--scroll"

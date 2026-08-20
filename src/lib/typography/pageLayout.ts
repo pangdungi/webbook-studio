@@ -5,6 +5,7 @@ import {
 import {
   bookBookTitleClass,
   bookChapterTitleClass,
+  bookPageAsideClass,
   bookPageBodyClass,
   bookPageBookCoverClass,
   bookPageBookCoverImageClass,
@@ -20,6 +21,7 @@ import {
   bookQuoteSourceClass,
   bookQuoteTextClass,
 } from "@/lib/pages/bookPageCss";
+import { isAsideContentPage } from "@/lib/pages/asidePage";
 import { contentPageDocToHtml } from "@/lib/editor/pageContentHtml";
 import {
   buildPageLeadHtml,
@@ -86,5 +88,7 @@ export function buildPageEpubHtml(
     contentPageDocToHtml(bodyDoc).trim() || "<p class=\"book-body-p\"></p>",
   );
   const leadHtml = lead ? buildPageLeadHtml(lead) : "";
-  return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${bookPageClass} ${bookPageContentClass}"><div class="${bookPageBodyClass}">${leadHtml}${bodyInner}</div></article></div>`;
+  const contentClasses = [bookPageClass, bookPageContentClass];
+  if (isAsideContentPage(page)) contentClasses.push(bookPageAsideClass);
+  return `<div class="${bookPageShellClass} ${bookPageShellFlowClass}"><article class="${contentClasses.join(" ")}"><div class="${bookPageBodyClass}">${leadHtml}${bodyInner}</div></article></div>`;
 }

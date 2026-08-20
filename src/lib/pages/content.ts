@@ -85,6 +85,7 @@ export function parseChapterContent(
       title: typeof p.title === "string" ? p.title : undefined,
       content: p.content ?? structuredClone(EMPTY_TIPTAP_DOC),
       content_html: p.content_html ?? "",
+      layout: p.layout === "aside" ? "aside" : undefined,
       editor_done: p.editor_done === true,
       editor_memo:
         typeof p.editor_memo === "string" ? p.editor_memo : undefined,

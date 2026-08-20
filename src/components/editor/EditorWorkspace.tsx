@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { BookCoverEditor } from "@/components/editor/BookCoverEditor";
 import { BookEditor, type BookEditorHandle } from "@/components/editor/BookEditor";
 import { ChapterSidebar } from "@/components/editor/ChapterSidebar";
+import { ChapterTitlePickDialog } from "@/components/editor/ChapterTitlePickDialog";
 import { ReaderAnalysisPanel } from "@/components/editor/ReaderAnalysisPanel";
+import { BookTitlePickPanel } from "@/components/editor/BookTitlePickPanel";
 import { SalesPageCopyPanel } from "@/components/editor/SalesPageCopyPanel";
 import {
   normalizeBookCoverStyle,
@@ -13,6 +15,11 @@ import {
 } from "@/lib/books/coverStyle";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
 import { buildChapterSample } from "@/lib/readerAnalysis/sampleText";
+import type { BookTitleCandidate, BookTitlePickReport } from "@/lib/bookTitlePick/types";
+import type {
+  ChapterTitleCandidate,
+  ChapterTitlePickReport,
+} from "@/lib/chapterTitlePick/types";
 import type { SalesPageCopyReport } from "@/lib/salesPageCopy/types";
 import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
 import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
@@ -106,6 +113,29 @@ export function EditorWorkspace({
     () => initialReader.reader_analysis,
   );
   const [salesPanelOpen, setSalesPanelOpen] = useState(false);
+  const [titlePickPanelOpen, setTitlePickPanelOpen] = useState(false);
+  const [titlePickReport, setTitlePickReport] =
+    useState<BookTitlePickReport | null>(null);
+  const [titlePickLoading, setTitlePickLoading] = useState(false);
+  const [titlePickError, setTitlePickError] = useState<string | null>(null);
+  const [titlePickProvider, setTitlePickProvider] = useState<string | null>(
+    null,
+  );
+  const [titlePickChaptersAnalyzed, setTitlePickChaptersAnalyzed] = useState<
+    number | null
+  >(null);
+  const [chapterTitlePickChapterId, setChapterTitlePickChapterId] = useState<
+    string | null
+  >(null);
+  const [chapterTitlePickReport, setChapterTitlePickReport] =
+    useState<ChapterTitlePickReport | null>(null);
+  const [chapterTitlePickLoading, setChapterTitlePickLoading] = useState(false);
+  const [chapterTitlePickError, setChapterTitlePickError] = useState<
+    string | null
+  >(null);
+  const [chapterTitlePickProvider, setChapterTitlePickProvider] = useState<
+    string | null
+  >(null);
   const [salesCopyReport, setSalesCopyReport] =
     useState<SalesPageCopyReport | null>(() => initialReader.sales_page_copy);
   const [salesLoading, setSalesLoading] = useState(false);
@@ -833,6 +863,167 @@ export function EditorWorkspace({
     saveSalesPageCopy,
   ]);
 
+  const runBookTitlePick = useCallback(async () => {
+    setTitlePickLoading(true);
+    setTitlePickError(null);
+    setTitlePickProvider(null);
+    setTitlePickChaptersAnalyzed(null);
+
+    try {
+      await flushActiveChapter();
+
+      const res = await fetch("/api/book-title-pick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookId,
+          bookTitle: book.title,
+          bookSubtitle: book.subtitle,
+          readerAnalysis: readerReport ?? undefined,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof data.error === "string"
+            ? data.error
+            : "제목·부제목 생성에 실패했습니다.",
+        );
+      }
+
+      setTitlePickReport(data.report as BookTitlePickReport);
+      setTitlePickProvider(
+        typeof data.provider === "string" ? data.provider : null,
+      );
+      setTitlePickChaptersAnalyzed(
+        typeof data.chaptersAnalyzed === "number" ? data.chaptersAnalyzed : null,
+      );
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "제목·부제목 생성에 실패했습니다.";
+      setTitlePickError(msg);
+    } finally {
+      setTitlePickLoading(false);
+    }
+  }, [
+    book.subtitle,
+    book.title,
+    bookId,
+    flushActiveChapter,
+    readerReport,
+  ]);
+
+  const runChapterTitlePick = useCallback(
+    async (chapterId: string) => {
+      setChapterTitlePickLoading(true);
+      setChapterTitlePickError(null);
+      setChapterTitlePickProvider(null);
+      setChapterTitlePickReport(null);
+
+      try {
+        if (activeChapterId === chapterId) {
+          await flushActiveChapter();
+        }
+
+        const chapter = chaptersRef.current.find((c) => c.id === chapterId);
+        if (!chapter) {
+          throw new Error("장을 찾을 수 없습니다.");
+        }
+
+        const res = await fetch("/api/chapter-title-pick", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            chapterId,
+            bookTitle: book.title,
+            chapter: {
+              title: chapter.title,
+              content_json: chapter.content_json,
+              content_html: chapter.content_html,
+              sort_order: chapter.sort_order,
+            },
+          }),
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(
+            typeof data.error === "string"
+              ? data.error
+              : "장 제목 생성에 실패했습니다.",
+          );
+        }
+
+        setChapterTitlePickReport(data.report as ChapterTitlePickReport);
+        setChapterTitlePickProvider(
+          typeof data.provider === "string" ? data.provider : null,
+        );
+        setMessage("장 제목 후보가 준비됐습니다. 팝업에서 고르세요.");
+      } catch (e) {
+        const msg =
+          e instanceof Error ? e.message : "장 제목 생성에 실패했습니다.";
+        setChapterTitlePickError(msg);
+        setMessage(msg);
+      } finally {
+        setChapterTitlePickLoading(false);
+      }
+    },
+    [activeChapterId, book.title, flushActiveChapter],
+  );
+
+  const openChapterTitlePick = useCallback(
+    (chapterId: string) => {
+      setChapterTitlePickChapterId(chapterId);
+      setMessage("이 장의 페이지를 읽어 제목 후보를 만드는 중…");
+      void runChapterTitlePick(chapterId);
+    },
+    [runChapterTitlePick],
+  );
+
+  const closeChapterTitlePick = useCallback(() => {
+    setChapterTitlePickChapterId(null);
+    setChapterTitlePickReport(null);
+    setChapterTitlePickError(null);
+    setChapterTitlePickProvider(null);
+    setChapterTitlePickLoading(false);
+  }, []);
+
+  const applyBookTitleCandidate = useCallback(
+    async (candidate: BookTitleCandidate) => {
+      const title = candidate.title.trim();
+      const subtitle = candidate.subtitle.trim() || null;
+      if (!title) return;
+
+      setBook((b) => ({ ...b, title, subtitle }));
+      try {
+        const res = await fetch(`/api/books/${bookId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, subtitle }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof data.error === "string"
+              ? data.error
+              : "제목 저장에 실패했습니다.",
+          );
+        }
+        setMessage("제목·부제목을 표지에 적용했습니다.");
+        setSaveState("saved");
+      } catch (e) {
+        setMessage(
+          e instanceof Error
+            ? e.message
+            : "제목 저장에 실패했습니다. 「전체 저장」을 눌러 주세요.",
+        );
+        setSaveState("pending");
+      }
+    },
+    [bookId],
+  );
+
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {
@@ -881,6 +1072,43 @@ export function EditorWorkspace({
       setSaveState("pending");
     },
     [markChapterDirty],
+  );
+
+  const applyChapterTitleCandidate = useCallback(
+    async (candidate: ChapterTitleCandidate) => {
+      const chapterId = chapterTitlePickChapterId;
+      if (!chapterId) return;
+
+      const title = candidate.title.trim();
+      if (!title) return;
+
+      renameChapter(chapterId, title);
+      try {
+        const res = await fetch(`/api/chapters/${chapterId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(
+            typeof data.error === "string"
+              ? data.error
+              : "장 제목 저장에 실패했습니다.",
+          );
+        }
+        setMessage("장 제목을 적용했습니다.");
+        setSaveState("saved");
+      } catch (e) {
+        setMessage(
+          e instanceof Error
+            ? e.message
+            : "장 제목 저장에 실패했습니다. 「전체 저장」을 눌러 주세요.",
+        );
+        setSaveState("pending");
+      }
+    },
+    [chapterTitlePickChapterId, renameChapter],
   );
 
   const saveChapterFromEditor = useCallback(
@@ -1521,6 +1749,7 @@ export function EditorWorkspace({
             if (!versionsPanelOpen) {
               setReaderPanelOpen(false);
               setSalesPanelOpen(false);
+              setTitlePickPanelOpen(false);
             }
           }}
           aria-pressed={versionsPanelOpen}
@@ -1536,7 +1765,10 @@ export function EditorWorkspace({
           type="button"
           onClick={() => {
             setReaderPanelOpen((open) => !open);
-            if (!readerPanelOpen) setSalesPanelOpen(false);
+            if (!readerPanelOpen) {
+              setSalesPanelOpen(false);
+              setTitlePickPanelOpen(false);
+            }
           }}
           title="타겟 독자 분석 패널 열기/닫기"
           aria-pressed={readerPanelOpen}
@@ -1552,7 +1784,10 @@ export function EditorWorkspace({
           type="button"
           onClick={() => {
             setSalesPanelOpen((open) => !open);
-            if (!salesPanelOpen) setReaderPanelOpen(false);
+            if (!salesPanelOpen) {
+              setReaderPanelOpen(false);
+              setTitlePickPanelOpen(false);
+            }
           }}
           title="상세페이지 문구 생성 패널"
           aria-pressed={salesPanelOpen}
@@ -1563,6 +1798,30 @@ export function EditorWorkspace({
           }`}
         >
           상세페이지
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            const willOpen = !titlePickPanelOpen;
+            setTitlePickPanelOpen((open) => !open);
+            if (willOpen) {
+              setReaderPanelOpen(false);
+              setSalesPanelOpen(false);
+              setVersionsPanelOpen(false);
+              if (!titlePickLoading) {
+                void runBookTitlePick();
+              }
+            }
+          }}
+          title="책 전체 원고를 읽고 표지용 제목·부제목 후보 생성"
+          aria-pressed={titlePickPanelOpen}
+          className={`rounded-lg border px-4 py-2 text-sm font-medium ${
+            titlePickPanelOpen
+              ? "border-emerald-400 bg-emerald-100 text-emerald-950"
+              : "border-emerald-200 bg-emerald-50 text-emerald-950 hover:bg-emerald-100"
+          }`}
+        >
+          책 제목뽑기
         </button>
         <a
           href={`/admin/books/${bookId}/preview`}
@@ -1638,7 +1897,7 @@ export function EditorWorkspace({
       )}
 
       <div
-        className="flex min-h-0 flex-1"
+        className="flex min-h-0 min-w-0 flex-1 overflow-x-auto"
         style={headingFontCssVariables(displayBook.heading_fonts)}
       >
         <ChapterSidebar
@@ -1654,6 +1913,7 @@ export function EditorWorkspace({
           onPageMemoChange={setPageMemo}
           onAdd={addChapter}
           onDelete={(id) => void deleteChapter(id)}
+          onPickChapterTitle={openChapterTitlePick}
           onReorder={reorderChapters}
           onPageDragEnd={(pageId, overId, insertPosition) =>
             void movePageByDragOrder(pageId, overId, insertPosition)
@@ -1772,7 +2032,38 @@ export function EditorWorkspace({
             onGenerate={() => void runSalesPageCopy()}
           />
         )}
+        {titlePickPanelOpen && (
+          <BookTitlePickPanel
+            currentTitle={book.title}
+            currentSubtitle={book.subtitle}
+            report={titlePickReport}
+            loading={titlePickLoading}
+            error={titlePickError}
+            provider={titlePickProvider}
+            chaptersAnalyzed={titlePickChaptersAnalyzed}
+            onGenerate={() => void runBookTitlePick()}
+            onApply={(candidate) => void applyBookTitleCandidate(candidate)}
+          />
+        )}
       </div>
+      <ChapterTitlePickDialog
+        open={chapterTitlePickChapterId != null}
+        chapterLabel={
+          chapters.find((c) => c.id === chapterTitlePickChapterId)?.title ??
+          "장"
+        }
+        loading={chapterTitlePickLoading}
+        error={chapterTitlePickError}
+        provider={chapterTitlePickProvider}
+        report={chapterTitlePickReport}
+        onClose={closeChapterTitlePick}
+        onRegenerate={() => {
+          if (chapterTitlePickChapterId) {
+            void runChapterTitlePick(chapterTitlePickChapterId);
+          }
+        }}
+        onApply={(candidate) => void applyChapterTitleCandidate(candidate)}
+      />
     </div>
   );
 }

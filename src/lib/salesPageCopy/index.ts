@@ -307,11 +307,20 @@ type ChapterLike = Pick<
   "title" | "content_json" | "content_html" | "sort_order"
 >;
 
-/** 전체 장 원고 — 장마다 순차 digest 후 최종 합성 (잘림 없음) */
-export async function runSalesPageCopyFromChapters(
+export type BookManuscriptAnalysis = {
+  provider: LlmProvider;
+  blocks: ChapterBlock[];
+  manuscript: string | null;
+  chapterDigests: ChapterDigest[] | null;
+  chaptersAnalyzed: number;
+  digestCalls: number;
+};
+
+/** 전체 장 원고 — digest 또는 단일 패스용 원고 준비 */
+export async function analyzeBookManuscript(
   chapters: ChapterLike[],
-  input: Omit<SalesPageCopyInput, "fullText">,
-): Promise<SalesPageCopyResult & { chaptersAnalyzed: number; digestCalls: number }> {
+  bookTitle: string,
+): Promise<BookManuscriptAnalysis> {
   const blocks = buildChapterBlocks(chapters);
   if (blocks.length === 0) {
     throw new Error("분석할 원고가 없습니다. 챕터에 본문을 작성해 주세요.");
@@ -321,37 +330,68 @@ export async function runSalesPageCopyFromChapters(
   const manuscript = blocksToManuscript(blocks);
 
   if (shouldUseSinglePass(blocks, manuscript.length)) {
-    const result = await generateFinalCopy(
+    return {
       provider,
-      buildFinalUserMessage({
-        bookTitle: input.bookTitle,
-        bookSubtitle: input.bookSubtitle,
-        manuscript,
-        chapterBlocks: blocks,
-        readerAnalysis: input.readerAnalysis,
-      }),
-    );
-    return { ...result, chaptersAnalyzed: blocks.length, digestCalls: 0 };
+      blocks,
+      manuscript,
+      chapterDigests: null,
+      chaptersAnalyzed: blocks.length,
+      digestCalls: 0,
+    };
   }
 
-  const chapterDigests = await digestAllChapters(
-    provider,
-    input.bookTitle,
-    blocks,
-  );
-
+  const chapterDigests = await digestAllChapters(provider, bookTitle, blocks);
   const digestCalls = chapterDigests.reduce((sum, d) => sum + d.parts, 0);
 
-  const result = await generateFinalCopy(
+  return {
     provider,
-    buildFinalUserMessage({
-      bookTitle: input.bookTitle,
-      bookSubtitle: input.bookSubtitle,
-      chapterDigests,
-      chapterBlocks: blocks,
-      readerAnalysis: input.readerAnalysis,
-    }),
-  );
+    blocks,
+    manuscript: null,
+    chapterDigests,
+    chaptersAnalyzed: blocks.length,
+    digestCalls,
+  };
+}
 
-  return { ...result, chaptersAnalyzed: blocks.length, digestCalls };
+export function buildManuscriptContextMessage(input: {
+  bookTitle: string;
+  bookSubtitle?: string | null;
+  manuscript?: string | null;
+  chapterDigests?: ChapterDigest[] | null;
+  chapterBlocks: ChapterBlock[];
+  readerAnalysis?: ReaderAnalysisReport | null;
+}): string {
+  return buildFinalUserMessage({
+    bookTitle: input.bookTitle,
+    bookSubtitle: input.bookSubtitle,
+    manuscript: input.manuscript ?? undefined,
+    chapterDigests: input.chapterDigests ?? undefined,
+    chapterBlocks: input.chapterBlocks,
+    readerAnalysis: input.readerAnalysis,
+  });
+}
+
+/** 전체 장 원고 — 장마다 순차 digest 후 최종 합성 (잘림 없음) */
+export async function runSalesPageCopyFromChapters(
+  chapters: ChapterLike[],
+  input: Omit<SalesPageCopyInput, "fullText">,
+): Promise<SalesPageCopyResult & { chaptersAnalyzed: number; digestCalls: number }> {
+  const analysis = await analyzeBookManuscript(chapters, input.bookTitle);
+
+  const userMessage = buildManuscriptContextMessage({
+    bookTitle: input.bookTitle,
+    bookSubtitle: input.bookSubtitle,
+    manuscript: analysis.manuscript,
+    chapterDigests: analysis.chapterDigests,
+    chapterBlocks: analysis.blocks,
+    readerAnalysis: input.readerAnalysis,
+  });
+
+  const result = await generateFinalCopy(analysis.provider, userMessage);
+
+  return {
+    ...result,
+    chaptersAnalyzed: analysis.chaptersAnalyzed,
+    digestCalls: analysis.digestCalls,
+  };
 }

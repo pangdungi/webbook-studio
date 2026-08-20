@@ -194,7 +194,7 @@ export function BookCoverEditor({
         )}
       </aside>
 
-      <div className="book-page-editor-scroll flex-1 overflow-y-auto">
+      <div className="book-page-editor-scroll book-page-editor-scroll--book-cover min-h-0 flex-1 overflow-y-auto">
         <div ref={shellRef} className={bookPageShellClass}>
           {hasImage ? (
             <article

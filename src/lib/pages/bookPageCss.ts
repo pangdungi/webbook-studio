@@ -1,4 +1,5 @@
 import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
+import { bookSansFontFamily, NOTO_SANS_KR_GOOGLE_CSS } from "@/lib/typography/headingFonts";
 
 /** A4 기준 — 210×297mm, 편집·EPUB·리더 동일 페이지 크기 */
 export const BOOK_PAGE_REF_WIDTH = "42rem";
@@ -30,6 +31,8 @@ export const bookPageBookCoverImageClass = "book-page--book-cover-image";
 export const bookCoverImageClass = "book-cover-image";
 export const bookBookTitleClass = "book-book-title";
 export const bookPageContentClass = "book-page--content";
+export const bookPageAsideClass = "book-page--aside";
+export const BOOK_PAGE_ASIDE_BG = "#ececea";
 export const bookPageQuoteClass = "book-page--quote";
 export const bookChapterTitleClass = "book-chapter-title";
 export const bookQuotePageClass = "book-quote-page";
@@ -129,8 +132,30 @@ function pageBoxCss(p: string, important = false) {
       word-break: keep-all${i};
     }
     ${quotePageCss(p, i)}
+    ${asidePageCss(p, i)}
     ${bookCoverImagePageCss(p, important)}
   `;
+}
+
+function asidePageCss(p: string, i: string) {
+  return `
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} {
+      background-color: ${BOOK_PAGE_ASIDE_BG}${i};
+      font-family: ${bookSansFontFamily}${i};
+      color: #44403c${i};
+    }
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} .${bookPageBodyClass},
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} .book-page-subtitle,
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} .ProseMirror,
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} h2,
+    ${p}.${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} h3 {
+      font-family: ${bookSansFontFamily}${i};
+    }
+  `;
+}
+
+export function bookAsideFontImportCss(): string {
+  return `@import url("${NOTO_SANS_KR_GOOGLE_CSS}");`;
 }
 
 /** 책 표지 이미지 — 가운데, 책 크기로 (전체 너비 X) */
@@ -667,6 +692,9 @@ export function bookPageEditorShellCss() {
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .book-page-subtitle--editor-preview + .book-page-prose .ProseMirror > p.book-body-p:first-child {
       text-indent: 1em;
     }
+    .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass}.${bookPageAsideClass} {
+      background-color: ${BOOK_PAGE_ASIDE_BG} !important;
+    }
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .ProseMirror > h2:first-child,
     .book-page-editor-scroll .${bookPageClass}.${bookPageContentClass} .ProseMirror > h3:first-child {
       display: block;
@@ -729,6 +757,55 @@ export function bookPageEditorShellCss() {
       word-break: keep-all !important;
       color: #0c0a09 !important;
       outline: none;
+    }
+    .book-page-editor-scroll--book-cover {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding: 0.5rem;
+    }
+    .book-page-editor-scroll--book-cover .${bookPageShellClass} {
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      width: 100%;
+      max-width: none;
+      min-height: calc(100dvh - 7.5rem);
+      margin: 0;
+    }
+    .book-page-editor-scroll--book-cover .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      display: flex;
+      flex: 1;
+      align-items: center;
+      justify-content: center;
+      width: 100% !important;
+      max-width: min(100%, calc((100dvh - 8.5rem) * 210 / 297)) !important;
+      height: auto !important;
+      min-height: calc(100dvh - 8.5rem) !important;
+      max-height: none !important;
+      padding: 0.25rem !important;
+      box-shadow: none;
+      background-color: transparent;
+    }
+    .book-page-editor-scroll--book-cover .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
+      display: block;
+      width: auto;
+      height: auto;
+      max-width: min(100%, calc((100dvh - 8.5rem) * 210 / 297)) !important;
+      max-height: calc(100dvh - 8.5rem) !important;
+      object-fit: contain;
+      object-position: center center;
+      box-shadow: 0 1px 3px rgb(0 0 0 / 0.08), 0 8px 28px rgb(0 0 0 / 0.1);
+      border-radius: 2px;
+    }
+    .book-page-editor-scroll--book-cover .${bookPageBookCoverClass}:not(.${bookPageBookCoverImageClass}) {
+      width: min(100%, calc((100dvh - 8.5rem) * 210 / 297)) !important;
+      height: calc(100dvh - 8.5rem) !important;
+      min-height: calc(100dvh - 8.5rem) !important;
+      max-height: calc(100dvh - 8.5rem) !important;
     }
   `;
 }
@@ -803,6 +880,16 @@ export function syncBookPageMetrics(
   shell.style.setProperty(BOOK_PAGE_WIDTH_VAR, `${w}px`);
 
   if (!mode) {
+    const coverEditorShell = shell.closest(".book-page-editor-scroll--book-cover");
+    if (
+      coverEditorShell &&
+      article &&
+      isBookCoverImageArticle(article)
+    ) {
+      shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+      return;
+    }
+
     const h = Math.round(w * (297 / 210));
     shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${h}px`);
     return;

@@ -116,6 +116,19 @@ body {
   }
 }
 
+/* 페이지 모드 — 터치 기기에서도 좌우 넘기기 버튼 표시 */
+@media (hover: none), (pointer: coarse) {
+  .reader-edge-nav {
+    display: flex;
+    opacity: 0.55;
+  }
+
+  .reader-edge-nav:active {
+    opacity: 0.95;
+    color: rgb(28 25 23);
+  }
+}
+
 .reader-edge-nav--prev {
   left: 0;
 }

@@ -64,6 +64,8 @@ export function isEditorMutationApiPath(
   if (pathname === "/api/writing-evaluation") return true;
   if (pathname === "/api/reader-analysis") return true;
   if (pathname === "/api/sales-page-copy") return true;
+  if (pathname === "/api/book-title-pick") return true;
+  if (pathname === "/api/chapter-title-pick") return true;
   if (pathname === "/api/page-social-copy") return true;
   if (/^\/api\/access\/[^/]+$/.test(pathname)) return true;
 
