@@ -1,6 +1,11 @@
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
 import {
-  bookFontFaceCss,
-  bookSerifFontFamily,
+  bodyFontFamily,
+  bookBodyFontFamilyVar,
+  bookTypographyFontFaceCss,
+  DEFAULT_BOOK_BODY_FONT,
+} from "@/lib/typography/bodyFonts";
+import {
   headingFontFamily,
   type BookHeadingFonts,
   DEFAULT_BOOK_HEADING_FONTS,
@@ -26,8 +31,10 @@ import { readerContentProtectionCss } from "@/lib/reader/contentProtection";
 import { publishingReaderPageCss } from "@/lib/typography/publishingTypography";
 import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
 
-/** 본문 명조 — 편집기·EPUB·리더 공통 */
-export const bookBodyFontFamily = bookSerifFontFamily;
+/** 본문 — CSS 변수(--wbs-font-body) 또는 명조 fallback */
+export { bookBodyFontFamilyVar as bookBodyFontFamily } from "@/lib/typography/bodyFonts";
+
+const bookBodyFontFamily = bookBodyFontFamilyVar;
 
 export { NOTO_SERIF_KR_GOOGLE_CSS } from "@/lib/typography/headingFonts";
 
@@ -573,9 +580,11 @@ function headingFontsExplicitCss(
 export function epubTypographyCss(
   writingModeCss: string,
   headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  bodyFont: BookBodyFont = DEFAULT_BOOK_BODY_FONT,
 ) {
   const vars = `
     :root {
+      --wbs-font-body: ${bodyFontFamily(bodyFont)};
       --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)};
       --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)};
       --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)};
@@ -583,7 +592,7 @@ export function epubTypographyCss(
   `;
 
   return `
-    ${bookFontFaceCss(headingFonts)}
+    ${bookTypographyFontFaceCss(headingFonts, bodyFont)}
     ${vars}
     ${headingFontsExplicitCss(headingFonts)}
     ${writingModeCss}
@@ -618,6 +627,7 @@ export function readerInjectCss(
   viewMode: "scroll" | "paginated" = "scroll",
   headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
   protectContent = false,
+  bodyFont: BookBodyFont = DEFAULT_BOOK_BODY_FONT,
 ) {
   const modeCss =
     writingMode === "vertical-rl"
@@ -626,6 +636,7 @@ export function readerInjectCss(
 
   const vars = `
     :root {
+      --wbs-font-body: ${bodyFontFamily(bodyFont)} !important;
       --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)} !important;
       --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)} !important;
       --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)} !important;
@@ -654,6 +665,7 @@ export function readerHtmlScrollInjectCss(
   headingFonts: BookHeadingFonts = DEFAULT_BOOK_HEADING_FONTS,
   protectContent = false,
   viewMode: "scroll" | "paginated" = "scroll",
+  bodyFont: BookBodyFont = DEFAULT_BOOK_BODY_FONT,
 ) {
   const modeCss =
     writingMode === "vertical-rl"
@@ -662,6 +674,7 @@ export function readerHtmlScrollInjectCss(
 
   const vars = `
     :root {
+      --wbs-font-body: ${bodyFontFamily(bodyFont)} !important;
       --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)} !important;
       --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)} !important;
       --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)} !important;

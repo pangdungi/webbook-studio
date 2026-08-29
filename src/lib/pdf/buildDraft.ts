@@ -1,6 +1,7 @@
 import { buildPdfBufferFromBook } from "@/lib/pdf/buildPdfBuffer";
 import type { Book, Chapter } from "@/lib/types/database";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type DraftPdfResult =
@@ -44,6 +45,7 @@ export async function buildDraftPdfBuffer(
       {
         ...book,
         heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+        body_font: normalizeBookBodyFont(book.body_font),
       },
       chapters,
     );

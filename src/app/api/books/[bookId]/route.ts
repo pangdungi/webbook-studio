@@ -8,6 +8,7 @@ import {
   normalizeCoverColor,
 } from "@/lib/books/coverStyle";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeReaderAnalysisReport } from "@/lib/readerAnalysis/normalize";
 import { normalizeSalesPageCopyReport } from "@/lib/salesPageCopy/normalize";
 
@@ -64,6 +65,9 @@ export async function PATCH(request: Request, context: RouteContext) {
   if (body.cover_path === null) updates.cover_path = null;
   if (body.heading_fonts && typeof body.heading_fonts === "object") {
     updates.heading_fonts = normalizeBookHeadingFonts(body.heading_fonts);
+  }
+  if (typeof body.body_font === "string") {
+    updates.body_font = normalizeBookBodyFont(body.body_font);
   }
   if (typeof body.cover_bg_color === "string") {
     updates.cover_bg_color = normalizeCoverColor(

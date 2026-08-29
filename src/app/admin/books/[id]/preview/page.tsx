@@ -1,6 +1,7 @@
 import { BookPreviewClient } from "@/components/reader/BookPreviewClient";
 import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type PageProps = {
@@ -18,7 +19,7 @@ export default async function BookPreviewPage({ params }: PageProps) {
 
   const { data: book } = await supabase
     .from("books")
-    .select("id, title, writing_mode, heading_fonts")
+    .select("*")
     .eq("id", bookId)
     .eq("created_by", admin.id)
     .single();
@@ -37,6 +38,7 @@ export default async function BookPreviewPage({ params }: PageProps) {
       title={book.title}
       writingMode={book.writing_mode}
       headingFonts={normalizeBookHeadingFonts(book.heading_fonts)}
+      bodyFont={normalizeBookBodyFont(book.body_font)}
     />
   );
 }

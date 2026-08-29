@@ -1,4 +1,4 @@
-/** 장·중·소제목 서체 — 책 전체에 동일 적용 (본문은 항상 명조) */
+/** 장·중·소제목 서체 — 책 전체에 동일 적용 (본문은 별도 body_font 설정) */
 export type HeadingFontRole = "serif" | "sans";
 
 export type BookHeadingFonts = {

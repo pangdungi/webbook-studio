@@ -1,3 +1,4 @@
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import type { ReaderAnalysisReport } from "@/lib/readerAnalysis/types";
 import type { SalesPageCopyReport } from "@/lib/salesPageCopy/types";
@@ -22,6 +23,7 @@ export type Book = {
   cover_title_color: string;
   writing_mode: WritingMode;
   heading_fonts: BookHeadingFonts;
+  body_font: BookBodyFont;
   status: BookStatus;
   epub_storage_path: string | null;
   pdf_storage_path: string | null;

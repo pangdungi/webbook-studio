@@ -16,6 +16,7 @@ export async function applyBookVersionSnapshot(
       cover_bg_color: snapshot.book.cover_bg_color,
       cover_title_color: snapshot.book.cover_title_color,
       heading_fonts: snapshot.book.heading_fonts,
+      body_font: snapshot.book.body_font ?? "serif",
       reader_pitch: snapshot.book.reader_pitch,
       reader_analysis: snapshot.book.reader_analysis,
       sales_page_copy: snapshot.book.sales_page_copy ?? null,

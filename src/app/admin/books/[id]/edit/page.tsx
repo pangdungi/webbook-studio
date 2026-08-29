@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type PageProps = { params: Promise<{ id: string }> };
@@ -54,6 +55,7 @@ export default async function EditBookPage({ params }: PageProps) {
           ...book,
           ...normalizeBookCoverStyle(book),
           heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+          body_font: normalizeBookBodyFont(book.body_font),
           ...normalizeBookReaderFields(book),
         }}
         initialChapters={chapters ?? []}

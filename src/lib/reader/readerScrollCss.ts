@@ -1,6 +1,7 @@
 import type { ReaderViewMode } from "@/lib/reader/viewMode";
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
+import { bookTypographyFontFaceCss, DEFAULT_BOOK_BODY_FONT } from "@/lib/typography/bodyFonts";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
-import { bookFontFaceCss } from "@/lib/typography/headingFonts";
 import {
   bookCoverImageClass,
   bookCoverImagePageCss,
@@ -27,6 +28,7 @@ export function readerScrollSurfaceCss(
   headingFonts: BookHeadingFonts,
   viewMode: ReaderViewMode,
   protectContent = false,
+  bodyFont: BookBodyFont = DEFAULT_BOOK_BODY_FONT,
 ) {
   const i = " !important";
   const paginated = viewMode === "paginated";
@@ -154,7 +156,6 @@ export function readerScrollSurfaceCss(
   `;
 
   return `
-    ${bookFontFaceCss(headingFonts)}
     ${readerPaginateMeasureCss()}
     .reader-scroll-viewport {
       position: relative${i};
@@ -181,8 +182,9 @@ export function readerScrollSurfaceCss(
       padding: 0${i};
       overflow: visible${i};
     }
+    ${bookTypographyFontFaceCss(headingFonts, bodyFont)}
     ${modeLayout}
-    ${readerHtmlScrollInjectCss(writingMode, headingFonts, protectContent, viewMode)}
+    ${readerHtmlScrollInjectCss(writingMode, headingFonts, protectContent, viewMode, bodyFont)}
     ${viewMode === "scroll" ? readerScrollFullBleedCss() : ""}
   `;
 }

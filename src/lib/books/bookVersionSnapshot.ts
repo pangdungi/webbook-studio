@@ -1,5 +1,6 @@
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
 import { normalizeBookReaderFields } from "@/lib/books/readerFields";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import type { Book, Chapter } from "@/lib/types/database";
 
@@ -18,6 +19,7 @@ export type BookVersionBookSnapshot = {
   cover_bg_color: string;
   cover_title_color: string;
   heading_fonts: Book["heading_fonts"];
+  body_font: Book["body_font"];
   reader_pitch: string;
   reader_analysis: Book["reader_analysis"];
   sales_page_copy: Book["sales_page_copy"];
@@ -45,6 +47,7 @@ export function buildBookVersionSnapshot(
     ...book,
     ...normalizeBookCoverStyle(book),
     heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+    body_font: normalizeBookBodyFont(book.body_font),
     ...normalizeBookReaderFields(book),
   };
 
@@ -56,6 +59,7 @@ export function buildBookVersionSnapshot(
       cover_bg_color: normalized.cover_bg_color,
       cover_title_color: normalized.cover_title_color,
       heading_fonts: normalized.heading_fonts,
+      body_font: normalized.body_font,
       reader_pitch: normalized.reader_pitch,
       reader_analysis: normalized.reader_analysis,
       sales_page_copy: normalized.sales_page_copy,

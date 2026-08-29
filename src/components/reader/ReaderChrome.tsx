@@ -1,14 +1,11 @@
 "use client";
 
-import type { ReaderViewMode } from "@/lib/reader/viewMode";
 import {
   IconClose,
   IconFontLarge,
   IconFontNormal,
   IconFontSmall,
   IconList,
-  IconPages,
-  IconScroll,
 } from "@/components/reader/ReaderChromeIcons";
 import type { ReaderFontScale } from "@/lib/reader/fontScale";
 
@@ -26,8 +23,6 @@ type Props = {
   /** true — 독자 영역 안 absolute (iOS fixed 메뉴 시 scroll 튐 방지) */
   contained?: boolean;
   onClose: () => void;
-  viewMode: ReaderViewMode;
-  onViewMode: (mode: ReaderViewMode) => void;
   fontScale: ReaderFontScale;
   onFontScale: (scale: ReaderFontScale) => void;
   onOpenToc: () => void;
@@ -66,8 +61,6 @@ export function ReaderChrome({
   open,
   contained = false,
   onClose,
-  viewMode,
-  onViewMode,
   fontScale,
   onFontScale,
   onOpenToc,
@@ -107,20 +100,6 @@ export function ReaderChrome({
           <div className="flex flex-wrap items-center justify-center gap-2">
             <ChromeIconButton label="목차" onClick={onOpenToc}>
               <IconList />
-            </ChromeIconButton>
-            <ChromeIconButton
-              active={viewMode === "scroll"}
-              label="스크롤"
-              onClick={() => onViewMode("scroll")}
-            >
-              <IconScroll />
-            </ChromeIconButton>
-            <ChromeIconButton
-              active={viewMode === "paginated"}
-              label="페이지"
-              onClick={() => onViewMode("paginated")}
-            >
-              <IconPages />
             </ChromeIconButton>
             {FONT_SCALES.map((scale) => {
               const Icon = FONT_ICONS[scale];

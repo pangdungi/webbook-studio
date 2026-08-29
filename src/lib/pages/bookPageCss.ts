@@ -1,10 +1,15 @@
-import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
+import { bookBodyFontFamilyVar } from "@/lib/typography/bodyFonts";
 import { bookSansFontFamily, NOTO_SANS_KR_GOOGLE_CSS } from "@/lib/typography/headingFonts";
+
+const bookBodyFontFamily = bookBodyFontFamilyVar;
 
 /** A4 기준 — 210×297mm, 편집·EPUB·리더 동일 페이지 크기 */
 export const BOOK_PAGE_REF_WIDTH = "42rem";
 /** 스크롤 리더 — 넓은 화면에서 본문이 더 이상 늘어나지 않는 최대 너비 */
 export const READER_SCROLL_CONTENT_MAX_WIDTH = BOOK_PAGE_REF_WIDTH;
+/** 모바일·아이패드 — 표지 풀스크린 (데스크탑은 기존 카드 크기 유지) */
+export const READER_MOBILE_COVER_MAX_WIDTH_PX = 1024;
+export const READER_MOBILE_COVER_MEDIA = `(max-width: ${READER_MOBILE_COVER_MAX_WIDTH_PX}px)`;
 export const BOOK_PAGE_ASPECT = "297 / 210";
 /** 이미지 표지 — 본문 페이지보다 작게, 책 한 권 크기 */
 export const BOOK_COVER_IMAGE_MAX_WIDTH = "min(100%, 22rem)";
@@ -920,7 +925,28 @@ export function syncBookPageMetrics(
     const quote = article && isQuotePageArticle(article);
     if (splash) {
       if (article && isBookCoverImageArticle(article)) {
-        shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+        const mobileCover =
+          typeof window !== "undefined" &&
+          window.matchMedia(
+            `(max-width: ${READER_MOBILE_COVER_MAX_WIDTH_PX}px)`,
+          ).matches;
+        if (mobileCover) {
+          const ph =
+            readerVh > 0
+              ? readerVh
+              : rootEl?.clientHeight && rootEl.clientHeight > 0
+                ? rootEl.clientHeight
+                : typeof window !== "undefined"
+                  ? window.innerHeight
+                  : 0;
+          if (ph > 0) {
+            shell.style.setProperty(BOOK_PAGE_HEIGHT_VAR, `${ph}px`);
+          } else {
+            shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+          }
+        } else {
+          shell.style.removeProperty(BOOK_PAGE_HEIGHT_VAR);
+        }
       } else {
         const ph =
           readerVh > 0

@@ -17,6 +17,8 @@ import {
   readerScrollSurfaceCss,
 } from "@/lib/reader/readerScrollCss";
 import type { ReaderViewMode } from "@/lib/reader/viewMode";
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
+import { DEFAULT_BOOK_BODY_FONT } from "@/lib/typography/bodyFonts";
 import {
   bookPageShellClass,
   READER_SCROLL_CONTENT_MAX_WIDTH,
@@ -47,6 +49,7 @@ type Props = {
   viewMode: ReaderViewMode;
   writingMode: WritingMode;
   headingFonts?: BookHeadingFonts;
+  bodyFont?: BookBodyFont;
   fontSizePercent?: string;
   protectContent?: boolean;
   /** localStorage 키 접미사 — 독자 token 또는 preview:bookId */
@@ -72,6 +75,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
       viewMode,
       writingMode,
       headingFonts = DEFAULT_BOOK_HEADING_FONTS,
+      bodyFont = DEFAULT_BOOK_BODY_FONT,
       fontSizePercent = "100%",
       protectContent = false,
       progressStorageKey,
@@ -403,7 +407,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
         if (progressStorageKey && !restoredOnceRef.current) {
           const saved = loadReadingProgress(progressStorageKey);
           restoredOnceRef.current = true;
-          if (saved?.viewMode === viewMode) {
+          if (saved) {
             restoreScrollProgress(saved);
             targetTop = viewport.scrollTop;
           } else {
@@ -660,7 +664,7 @@ export const HtmlScrollReader = forwardRef<HtmlScrollReaderHandle, Props>(
     }, [bodyHtml, paginated, progressStorageKey, schedulePersistProgress]);
 
     const mode = writingMode === "vertical-rl" ? "vertical-rl" : "horizontal-tb";
-    const css = readerScrollSurfaceCss(mode, headingFonts, viewMode, protectContent);
+    const css = readerScrollSurfaceCss(mode, headingFonts, viewMode, protectContent, bodyFont);
 
     return (
       <div

@@ -34,9 +34,8 @@ export function loadReadingProgress(
     if (!raw) return null;
     const data = JSON.parse(raw) as Partial<ReaderReadingProgress>;
     if (typeof data.anchorId !== "string" || !data.anchorId) return null;
-    const viewMode = data.viewMode === "paginated" ? "paginated" : "scroll";
     return {
-      viewMode,
+      viewMode: "scroll",
       anchorId: data.anchorId,
       slideId: typeof data.slideId === "string" ? data.slideId : undefined,
       slideIndex:

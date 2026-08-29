@@ -4,6 +4,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { WritingMode } from "@/lib/types/database";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 import { DEFAULT_BOOK_HEADING_FONTS } from "@/lib/typography/headingFonts";
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
+import { DEFAULT_BOOK_BODY_FONT } from "@/lib/typography/bodyFonts";
 import {
   scrollUrlFromEpubUrl,
   useReaderScrollContent,
@@ -21,23 +23,17 @@ import {
   saveReaderFontScale,
   type ReaderFontScale,
 } from "@/lib/reader/fontScale";
-import {
-  loadReaderViewMode,
-  saveReaderViewMode,
-  type ReaderViewMode,
-} from "@/lib/reader/viewMode";
 
 type Props = {
   epubUrl: string;
   title: string;
   writingMode: WritingMode;
   headingFonts?: BookHeadingFonts;
+  bodyFont?: BookBodyFont;
   embedded?: boolean;
   protectContent?: boolean;
-  /** 있으면 localStorage에 읽던 위치·보기 모드 저장·복원 */
+  /** 있으면 localStorage에 읽던 위치 저장·복원 */
   progressStorageKey?: string;
-  /** progressStorageKey별 첫 방문 기본 보기 (발행 이북: scroll) */
-  defaultViewMode?: ReaderViewMode;
   /** 표지 storage 경로 — 변경 시 스크롤 HTML 캐시 무효화 */
   scrollCoverKey?: string | null;
 };
@@ -47,15 +43,12 @@ export function WebBookReader({
   title,
   writingMode,
   headingFonts = DEFAULT_BOOK_HEADING_FONTS,
+  bodyFont = DEFAULT_BOOK_BODY_FONT,
   embedded = false,
   protectContent = false,
   progressStorageKey,
-  defaultViewMode = "scroll",
   scrollCoverKey = null,
 }: Props) {
-  const [viewMode, setViewMode] = useState<ReaderViewMode>(() =>
-    loadReaderViewMode(progressStorageKey, defaultViewMode),
-  );
   const [fontScale, setFontScale] = useState<ReaderFontScale>(() =>
     loadReaderFontScale(),
   );
@@ -76,40 +69,29 @@ export function WebBookReader({
   }, [title, embedded]);
 
   useEffect(() => {
-    setViewMode(loadReaderViewMode(progressStorageKey, defaultViewMode));
     setFontScale(loadReaderFontScale());
-  }, [defaultViewMode, progressStorageKey]);
-
-  const changeViewMode = (mode: ReaderViewMode) => {
-    setViewMode(mode);
-    saveReaderViewMode(mode, progressStorageKey);
-  };
+  }, []);
 
   const changeFontScale = (scale: ReaderFontScale) => {
     setFontScale(scale);
     saveReaderFontScale(scale);
   };
 
-  const goPrev = useCallback(() => readerNavRef.current?.prev(), []);
   const tocGroups = content?.toc ? groupReaderToc(content.toc) : [];
-  const goNext = useCallback(() => readerNavRef.current?.next(), []);
   const goTo = useCallback((href: string) => readerNavRef.current?.goTo(href), []);
 
   const handleReadingAreaTap = useCallback(() => {
     if (tocOpen) return;
-    if (viewMode === "scroll") {
-      const viewport = readerAreaRef.current?.querySelector(
-        ".reader-scroll-viewport--scroll",
-      );
-      if (viewport instanceof HTMLElement) {
-        scrollPinOnChromeRef.current = viewport.scrollTop;
-      }
+    const viewport = readerAreaRef.current?.querySelector(
+      ".reader-scroll-viewport--scroll",
+    );
+    if (viewport instanceof HTMLElement) {
+      scrollPinOnChromeRef.current = viewport.scrollTop;
     }
     setChromeOpen((open) => !open);
-  }, [tocOpen, viewMode]);
+  }, [tocOpen]);
 
   useLayoutEffect(() => {
-    if (viewMode !== "scroll") return;
     const pin = scrollPinOnChromeRef.current;
     if (pin == null) return;
     const viewport = readerAreaRef.current?.querySelector(
@@ -124,7 +106,7 @@ export function WebBookReader({
         viewport.scrollTop = pin;
       });
     });
-  }, [chromeOpen, viewMode]);
+  }, [chromeOpen]);
 
   useEffect(() => {
     if (!protectContent) return;
@@ -143,22 +125,6 @@ export function WebBookReader({
       root.removeEventListener("cut", block);
     };
   }, [protectContent]);
-
-  useEffect(() => {
-    if (viewMode !== "paginated") return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "ArrowLeft") {
-        e.preventDefault();
-        goPrev();
-      }
-      if (e.key === "ArrowRight") {
-        e.preventDefault();
-        goNext();
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [viewMode, goPrev, goNext]);
 
   return (
     <div
@@ -235,9 +201,9 @@ export function WebBookReader({
 
         <div
           ref={readerAreaRef}
-          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden ${
-            viewMode === "paginated" ? "touch-pan-x" : "touch-pan-y"
-          } ${protectContent ? "select-none" : ""}`}
+          className={`relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden touch-pan-y ${
+            protectContent ? "select-none" : ""
+          }`}
         >
           {loading && (
             <div className="flex h-full items-center justify-center text-sm text-stone-500">
@@ -251,13 +217,13 @@ export function WebBookReader({
           )}
           {!loading && !error && content && (
             <HtmlScrollReader
-              key={viewMode}
               ref={readerNavRef}
               bodyHtml={content.bodyHtml}
               toc={content.toc}
-              viewMode={viewMode}
+              viewMode="scroll"
               writingMode={writingMode}
               headingFonts={headingFonts}
+              bodyFont={bodyFont}
               fontSizePercent={READER_FONT_SCALE_PERCENT[fontScale]}
               protectContent={protectContent}
               progressStorageKey={progressStorageKey}
@@ -265,34 +231,11 @@ export function WebBookReader({
             />
           )}
 
-          {viewMode === "paginated" && !loading && !error && content && (
-            <>
-              <button
-                type="button"
-                onClick={goPrev}
-                aria-label="이전 페이지"
-                className="reader-edge-nav reader-edge-nav--prev"
-              >
-                ‹
-              </button>
-              <button
-                type="button"
-                onClick={goNext}
-                aria-label="다음 페이지"
-                className="reader-edge-nav reader-edge-nav--next"
-              >
-                ›
-              </button>
-            </>
-          )}
-
           <ReaderChrome
             contained
             title={title}
             open={chromeOpen}
             onClose={() => setChromeOpen(false)}
-            viewMode={viewMode}
-            onViewMode={changeViewMode}
             fontScale={fontScale}
             onFontScale={changeFontScale}
             onOpenToc={() => {

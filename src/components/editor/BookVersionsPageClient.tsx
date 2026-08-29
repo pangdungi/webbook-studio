@@ -9,6 +9,7 @@ import {
   type BookVersionSnapshot,
 } from "@/lib/books/bookVersionSnapshot";
 import { parseChapterContent } from "@/lib/pages/content";
+import { bodyFontCssVariables } from "@/lib/typography/bodyFonts";
 import { headingFontCssVariables } from "@/lib/typography/headingFonts";
 import type { Book, Chapter } from "@/lib/types/database";
 
@@ -79,7 +80,10 @@ export function BookVersionsPageClient({
       />
       <div
         className="flex min-h-0 min-w-0 flex-1 flex-col"
-        style={headingFontCssVariables(displayBook.heading_fonts)}
+        style={{
+          ...headingFontCssVariables(displayBook.heading_fonts),
+          ...bodyFontCssVariables(displayBook.body_font),
+        }}
       >
         {versionPreview ? (
           <div className="border-b border-sky-200 bg-sky-50 px-4 py-2 text-sm text-sky-950">

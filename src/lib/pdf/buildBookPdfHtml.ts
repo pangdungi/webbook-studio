@@ -12,7 +12,12 @@ import {
 } from "@/lib/typography/pageLayout";
 import { bookPdfTypographyCss } from "@/lib/pdf/bookPdfTypography";
 import {
-  bookFontFaceCss,
+  bookTypographyFontFaceCss,
+  bodyFontFamily,
+  normalizeBookBodyFont,
+  type BookBodyFont,
+} from "@/lib/typography/bodyFonts";
+import {
   headingFontFamily,
   normalizeBookHeadingFonts,
   type BookHeadingFonts,
@@ -103,6 +108,7 @@ export function buildBookPdfHtml(
     | "cover_bg_color"
     | "cover_title_color"
     | "heading_fonts"
+    | "body_font"
   >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
   coverImageUrl?: string | null,
@@ -110,11 +116,13 @@ export function buildBookPdfHtml(
   const headingFonts: BookHeadingFonts = normalizeBookHeadingFonts(
     book.heading_fonts,
   );
+  const bodyFont: BookBodyFont = normalizeBookBodyFont(book.body_font);
   const bodyInner = collectPageHtml(book, chapters, coverImageUrl);
   const printCss = bookPdfPrintCss();
   const pdfType = bookPdfTypographyCss();
   const headingVars = `
     :root {
+      --wbs-font-body: ${bodyFontFamily(bodyFont)};
       --wbs-font-chapter: ${headingFontFamily(headingFonts.chapterTitle)};
       --wbs-font-h2: ${headingFontFamily(headingFonts.heading2)};
       --wbs-font-h3: ${headingFontFamily(headingFonts.heading3)};
@@ -130,7 +138,7 @@ export function buildBookPdfHtml(
   <meta charset="utf-8" />
   <title>${escapeHtml(book.title)}</title>
   <style>
-    ${bookFontFaceCss(headingFonts)}
+    ${bookTypographyFontFaceCss(headingFonts, bodyFont)}
     ${headingVars}
     ${writingModeCss(book.writing_mode)}
     ${printCss}

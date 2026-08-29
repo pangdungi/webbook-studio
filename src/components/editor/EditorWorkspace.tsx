@@ -31,6 +31,13 @@ import {
   normalizeBookHeadingFonts,
   type HeadingFontRole,
 } from "@/lib/typography/headingFonts";
+import {
+  BODY_FONT_OPTIONS,
+  bodyFontCssVariables,
+  bookTypographyFontFaceCss,
+  normalizeBookBodyFont,
+  type BookBodyFont,
+} from "@/lib/typography/bodyFonts";
 import { parseChapterContent } from "@/lib/pages/content";
 import {
   withAllPagesDone,
@@ -89,6 +96,7 @@ export function EditorWorkspace({
     ...initialBook,
     ...normalizeBookCoverStyle(initialBook),
     heading_fonts: normalizeBookHeadingFonts(initialBook.heading_fonts),
+    body_font: normalizeBookBodyFont(initialBook.body_font),
     ...normalizeBookReaderFields(initialBook),
   }));
   const [coverImageUrl, setCoverImageUrl] = useState<string | null>(
@@ -324,6 +332,7 @@ export function EditorWorkspace({
       cover_bg_color: s.cover_bg_color,
       cover_title_color: s.cover_title_color,
       heading_fonts: s.heading_fonts,
+      body_font: normalizeBookBodyFont(s.body_font ?? book.body_font),
       reader_pitch: s.reader_pitch,
       reader_analysis: s.reader_analysis,
       sales_page_copy: s.sales_page_copy ?? book.sales_page_copy,
@@ -625,6 +634,7 @@ export function EditorWorkspace({
         body: JSON.stringify({
           title: book.title,
           heading_fonts: book.heading_fonts,
+          body_font: book.body_font,
           cover_path: book.cover_path,
           cover_bg_color: book.cover_bg_color,
           cover_title_color: book.cover_title_color,
@@ -638,7 +648,7 @@ export function EditorWorkspace({
         const data = await bookRes.json().catch(() => ({}));
         let errMsg =
           typeof data.error === "string" ? data.error : "책 정보 저장 실패";
-        if (/column|does not exist|reader_|cover_|heading_fonts|sales_page_copy/i.test(errMsg)) {
+        if (/column|does not exist|reader_|cover_|heading_fonts|body_font|sales_page_copy/i.test(errMsg)) {
           errMsg = `${errMsg}\n\nSupabase SQL Editor에서 supabase/migrations/ 아래 마이그레이션 파일을 아직 안 돌렸을 수 있습니다.`;
         }
         if (bookRes.status === 401) {
@@ -670,6 +680,7 @@ export function EditorWorkspace({
     applyFlushedChapter,
     book.title,
     book.heading_fonts,
+    book.body_font,
     book.cover_path,
     book.cover_bg_color,
     book.cover_title_color,
@@ -1201,6 +1212,15 @@ export function EditorWorkspace({
     });
   };
 
+  const updateBodyFont = async (value: BookBodyFont) => {
+    setBook((b) => ({ ...b, body_font: value }));
+    await fetch(`/api/books/${bookId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body_font: value }),
+    });
+  };
+
   const updateHeadingFont = async (
     key: keyof BookHeadingFonts,
     value: HeadingFontRole,
@@ -1624,6 +1644,14 @@ export function EditorWorkspace({
 
   return (
     <div className="flex h-[100dvh] flex-col">
+      <style
+        dangerouslySetInnerHTML={{
+          __html: bookTypographyFontFaceCss(
+            displayBook.heading_fonts,
+            displayBook.body_font,
+          ),
+        }}
+      />
       {envLabel ? (
         <div className="shrink-0 border-b border-amber-200 bg-amber-50 px-4 py-2 text-center text-xs text-amber-950">
           {envLabel}
@@ -1644,9 +1672,25 @@ export function EditorWorkspace({
         />
         <div
           className="hidden items-center gap-2 rounded-lg border border-stone-200 px-2 py-1 text-xs text-stone-600 lg:flex"
-          title="책 전체에 동일 적용 — 장·중·소제목만 변경, 본문은 명조"
+          title="책 전체 서체 — 본문·장·중·소제목"
         >
           <span className="shrink-0 text-stone-400">서체</span>
+          <label className="flex items-center gap-1">
+            <span>본문</span>
+            <select
+              value={book.body_font}
+              onChange={(e) =>
+                void updateBodyFont(e.target.value as BookBodyFont)
+              }
+              className="max-w-[7.5rem] rounded border border-stone-200 bg-white px-1 py-0.5"
+            >
+              {BODY_FONT_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
           <label className="flex items-center gap-1">
             <span>장</span>
             <select
@@ -1898,7 +1942,10 @@ export function EditorWorkspace({
 
       <div
         className="flex min-h-0 min-w-0 flex-1 overflow-x-auto"
-        style={headingFontCssVariables(displayBook.heading_fonts)}
+        style={{
+          ...headingFontCssVariables(displayBook.heading_fonts),
+          ...bodyFontCssVariables(displayBook.body_font),
+        }}
       >
         <ChapterSidebar
           chapters={displayChapters}
@@ -1983,6 +2030,7 @@ export function EditorWorkspace({
                 ...nextBook,
                 ...normalizeBookCoverStyle(nextBook),
                 heading_fonts: normalizeBookHeadingFonts(nextBook.heading_fonts),
+                body_font: normalizeBookBodyFont(nextBook.body_font),
                 ...normalizeBookReaderFields(nextBook),
               }));
               setReaderPitch(

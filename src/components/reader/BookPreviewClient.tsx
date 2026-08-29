@@ -2,6 +2,7 @@
 
 import { WebBookReader } from "@/components/reader/WebBookReader";
 import type { WritingMode } from "@/lib/types/database";
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
   title: string;
   writingMode: WritingMode;
   headingFonts: BookHeadingFonts;
+  bodyFont: BookBodyFont;
 };
 
 export function BookPreviewClient({
@@ -16,6 +18,7 @@ export function BookPreviewClient({
   title,
   writingMode,
   headingFonts,
+  bodyFont,
 }: Props) {
   return (
     <div className="h-dvh min-h-0">
@@ -24,6 +27,7 @@ export function BookPreviewClient({
         title={title}
         writingMode={writingMode}
         headingFonts={headingFonts}
+        bodyFont={bodyFont}
         embedded
         progressStorageKey={`preview:${bookId}`}
       />

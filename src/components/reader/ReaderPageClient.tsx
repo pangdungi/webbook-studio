@@ -3,6 +3,7 @@
 import { WebBookReader } from "@/components/reader/WebBookReader";
 import { readerEpubPath } from "@/lib/access/readerSession";
 import type { WritingMode } from "@/lib/types/database";
+import type { BookBodyFont } from "@/lib/typography/bodyFonts";
 import type { BookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type Props = {
@@ -10,6 +11,7 @@ type Props = {
   title: string;
   writingMode: WritingMode;
   headingFonts: BookHeadingFonts;
+  bodyFont: BookBodyFont;
   scrollCoverKey?: string | null;
 };
 
@@ -19,6 +21,7 @@ export function ReaderPageClient({
   title,
   writingMode,
   headingFonts,
+  bodyFont,
   scrollCoverKey = null,
 }: Props) {
   return (
@@ -28,10 +31,10 @@ export function ReaderPageClient({
         title={title}
         writingMode={writingMode}
         headingFonts={headingFonts}
+        bodyFont={bodyFont}
         scrollCoverKey={scrollCoverKey}
         protectContent
         progressStorageKey={token}
-        defaultViewMode="scroll"
       />
     </div>
   );

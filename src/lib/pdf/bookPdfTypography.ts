@@ -7,7 +7,9 @@ import {
   bookPageShellClass,
   bookPageShellFlowClass,
 } from "@/lib/pages/bookPageCss";
-import { bookBodyFontFamily } from "@/lib/typography/bookStyles";
+import { bookBodyFontFamilyVar } from "@/lib/typography/bodyFonts";
+
+const bookBodyFontFamily = bookBodyFontFamilyVar;
 
 /** 편집기 16px 대비 약 3배 — PDF에서 실제로 보이는 크기 (px 고정) */
 export const BOOK_PDF_BODY_PX = 48;

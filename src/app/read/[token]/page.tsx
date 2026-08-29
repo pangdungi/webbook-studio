@@ -1,6 +1,7 @@
 import { ReaderAccessDenied } from "@/components/reader/ReaderAccessDenied";
 import { ReaderPageClient } from "@/components/reader/ReaderPageClient";
 import { validateReaderToken } from "@/lib/access/validate";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 import type { WritingMode } from "@/lib/types/database";
 
@@ -22,6 +23,7 @@ export default async function ReadPage({ params }: PageProps) {
     epub_storage_path: string | null;
     writing_mode: string;
     heading_fonts?: unknown;
+    body_font?: unknown;
     cover_path?: string | null;
   };
   if (book.status !== "published" || !book.epub_storage_path) {
@@ -36,6 +38,7 @@ export default async function ReadPage({ params }: PageProps) {
       title={book.title}
       writingMode={book.writing_mode as WritingMode}
       headingFonts={normalizeBookHeadingFonts(book.heading_fonts)}
+      bodyFont={normalizeBookBodyFont(book.body_font)}
       scrollCoverKey={book.cover_path ?? null}
     />
   );

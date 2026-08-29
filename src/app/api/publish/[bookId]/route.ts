@@ -7,6 +7,7 @@ import { requireAdmin } from "@/lib/supabase/admin";
 import { createClient, createServiceClient } from "@/lib/supabase/server";
 import { resolveBookCoverSignedUrl } from "@/lib/books/resolveCoverImageUrl";
 import { normalizeBookCoverStyle } from "@/lib/books/coverStyle";
+import { normalizeBookBodyFont } from "@/lib/typography/bodyFonts";
 import { normalizeBookHeadingFonts } from "@/lib/typography/headingFonts";
 
 type RouteContext = { params: Promise<{ bookId: string }> };
@@ -83,6 +84,7 @@ async function publishBook(_request: Request, context: RouteContext) {
     ...book,
     ...normalizeBookCoverStyle(book),
     heading_fonts: normalizeBookHeadingFonts(book.heading_fonts),
+    body_font: normalizeBookBodyFont(book.body_font),
   };
 
   const epubBuffer = await buildEpubBuffer(bookForExport, chapters, coverUrl);

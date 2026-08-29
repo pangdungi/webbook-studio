@@ -11,6 +11,7 @@ export async function buildPdfBufferFromBook(
     | "cover_bg_color"
     | "cover_title_color"
     | "heading_fonts"
+    | "body_font"
   >,
   chapters: Pick<Chapter, "title" | "content_json" | "content_html">[],
   coverImageUrl?: string | null,
