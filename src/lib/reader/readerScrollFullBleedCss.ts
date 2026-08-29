@@ -2,6 +2,7 @@ import {
   BOOK_PAGE_HEIGHT_VAR,
   isReaderMobileCoverLayout,
   READER_MOBILE_COVER_MEDIA,
+  READER_MOBILE_COVER_SURFACE_CLASS,
   READER_SCROLL_CONTENT_MAX_WIDTH,
   READER_VIEWPORT_H_VAR,
   bookAsideFontImportCss,
@@ -26,6 +27,54 @@ const bookBodyFontFamily = bookBodyFontFamilyVar;
 
 const SCROLL = ".reader-scroll-viewport--scroll";
 const SURFACE = `${SCROLL} .reader-scroll-surface`;
+
+/** 아이폰·갤럭시·아이패드 등 — 표지가 읽기 화면 한 장을 가득 채움 */
+function readerMobileCoverSplashCss(scope: string) {
+  const p = `${scope} `;
+  const i = " !important";
+
+  return `
+    ${p}.${bookPageShellSplashClass}:has(.${bookPageBookCoverImageClass}) {
+      box-sizing: border-box${i};
+      width: 100vw${i};
+      max-width: 100vw${i};
+      margin-left: calc(50% - 50vw)${i};
+      margin-right: calc(50% - 50vw)${i};
+      min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      max-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      padding: 0${i};
+      align-items: stretch${i};
+      justify-content: stretch${i};
+      background-color: #ffffff${i};
+    }
+    ${p}.${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
+      width: 100%${i};
+      max-width: 100%${i};
+      min-width: 0${i};
+      min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      max-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
+      margin: 0${i};
+      padding: 0${i};
+      display: flex${i};
+      align-items: center${i};
+      justify-content: center${i};
+      background-color: #ffffff${i};
+      overflow: hidden${i};
+    }
+    ${p}.${bookPageBookCoverImageClass} .${bookCoverImageClass} {
+      width: 100%${i};
+      height: 100%${i};
+      max-width: none${i};
+      max-height: none${i};
+      object-fit: contain${i};
+      object-position: center center${i};
+      box-shadow: none${i};
+      border-radius: 0${i};
+    }
+  `;
+}
 
 /** 스크롤 명언 페이지 — 본문 장과 동일한 한 장 크기(A4 비율), 가운데 정렬만 다름 */
 function readerScrollQuotePageBoxCss() {
@@ -130,46 +179,9 @@ export function readerScrollFullBleedCss() {
       width: auto${i};
       max-width: min(100%, 22rem)${i};
     }
+    ${readerMobileCoverSplashCss(`${SURFACE}.${READER_MOBILE_COVER_SURFACE_CLASS}`)}
     @media ${READER_MOBILE_COVER_MEDIA} {
-      ${SURFACE} .${bookPageShellSplashClass}:has(.${bookPageBookCoverImageClass}) {
-        box-sizing: border-box${i};
-        width: 100vw${i};
-        max-width: 100vw${i};
-        margin-left: calc(50% - 50vw)${i};
-        margin-right: calc(50% - 50vw)${i};
-        min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        max-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        padding: 0${i};
-        align-items: stretch${i};
-        justify-content: stretch${i};
-        background-color: #ffffff${i};
-      }
-      ${SURFACE} .${bookPageBookCoverClass}.${bookPageBookCoverImageClass} {
-        width: 100%${i};
-        max-width: 100%${i};
-        min-width: 0${i};
-        min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        max-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
-        margin: 0${i};
-        padding: 0${i};
-        display: flex${i};
-        align-items: center${i};
-        justify-content: center${i};
-        background-color: #ffffff${i};
-        overflow: hidden${i};
-      }
-      ${SURFACE} .${bookPageBookCoverImageClass} .${bookCoverImageClass} {
-        width: 100%${i};
-        height: 100%${i};
-        max-width: none${i};
-        max-height: none${i};
-        object-fit: contain${i};
-        object-position: center center${i};
-        box-shadow: none${i};
-        border-radius: 0${i};
-      }
+      ${readerMobileCoverSplashCss(SURFACE)}
     }
     ${SCROLL} {
       background-color: #fafaf9${i};
@@ -216,6 +228,7 @@ export function readerScrollFullBleedCss() {
 /** CSS 캐시·구버전 덮어쓰기 — 스크롤 레이아웃 직후 인라인 적용 */
 export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: number) {
   const mobileCover = isReaderMobileCoverLayout(viewportWidth);
+  root.classList.toggle(READER_MOBILE_COVER_SURFACE_CLASS, mobileCover);
 
   const fillColumn = (el: HTMLElement) => {
     el.style.setProperty("width", "100%");

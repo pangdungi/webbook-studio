@@ -9,13 +9,18 @@ export const BOOK_PAGE_REF_WIDTH = "42rem";
 export const READER_SCROLL_CONTENT_MAX_WIDTH = BOOK_PAGE_REF_WIDTH;
 /** 모바일·아이패드 — 표지 풀스크린 (데스크탑은 기존 카드 크기 유지) */
 export const READER_MOBILE_COVER_MAX_WIDTH_PX = 1366;
-/** 터치(iPad·폰) 또는 좁은 화면 — iPad 가로(1024px+)도 포함 */
-export const READER_MOBILE_COVER_MEDIA = `(hover: none) and (pointer: coarse), (max-width: ${READER_MOBILE_COVER_MAX_WIDTH_PX}px)`;
+export const READER_MOBILE_COVER_SURFACE_CLASS = "reader-scroll-surface--mobile-cover";
+/** 터치(아이폰·갤럭시·아이패드) 또는 좁은 화면 */
+export const READER_MOBILE_COVER_MEDIA = `(pointer: coarse), (hover: none) and (pointer: coarse), (max-width: ${READER_MOBILE_COVER_MAX_WIDTH_PX}px)`;
 
 /** JS 레이아웃 — CSS 미디어쿼리와 동일 조건 */
 export function isReaderMobileCoverLayout(viewportWidth?: number): boolean {
   if (typeof window !== "undefined") {
-    if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+    if (window.matchMedia("(pointer: coarse)").matches) return true;
+    if (
+      window.matchMedia("(hover: none)").matches &&
+      "ontouchstart" in window
+    ) {
       return true;
     }
     const w = viewportWidth ?? window.innerWidth;
