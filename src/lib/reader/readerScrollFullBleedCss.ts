@@ -1,6 +1,6 @@
 import {
   BOOK_PAGE_HEIGHT_VAR,
-  READER_MOBILE_COVER_MAX_WIDTH_PX,
+  isReaderMobileCoverLayout,
   READER_MOBILE_COVER_MEDIA,
   READER_SCROLL_CONTENT_MAX_WIDTH,
   READER_VIEWPORT_H_VAR,
@@ -133,6 +133,10 @@ export function readerScrollFullBleedCss() {
     @media ${READER_MOBILE_COVER_MEDIA} {
       ${SURFACE} .${bookPageShellSplashClass}:has(.${bookPageBookCoverImageClass}) {
         box-sizing: border-box${i};
+        width: 100vw${i};
+        max-width: 100vw${i};
+        margin-left: calc(50% - 50vw)${i};
+        margin-right: calc(50% - 50vw)${i};
         min-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
         height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
         max-height: var(${READER_VIEWPORT_H_VAR}, 100dvh)${i};
@@ -211,8 +215,7 @@ export function readerScrollFullBleedCss() {
 
 /** CSS 캐시·구버전 덮어쓰기 — 스크롤 레이아웃 직후 인라인 적용 */
 export function applyScrollFullBleedLayout(root: HTMLElement, viewportWidth: number) {
-  const mobileCover =
-    viewportWidth > 0 && viewportWidth <= READER_MOBILE_COVER_MAX_WIDTH_PX;
+  const mobileCover = isReaderMobileCoverLayout(viewportWidth);
 
   const fillColumn = (el: HTMLElement) => {
     el.style.setProperty("width", "100%");
