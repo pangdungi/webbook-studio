@@ -25,6 +25,17 @@ function applyMarks(text: string, marks?: MarkLike[]) {
   return out;
 }
 
+/** contenteditable의 줄바꿈(\n) → HTML br (독자·EPUB·PDF 동일) */
+function serializeTextNode(text: string, marks?: MarkLike[]): string {
+  const lines = text.split("\n");
+  if (lines.length <= 1) {
+    return applyMarks(escapeHtml(text), marks);
+  }
+  return lines
+    .map((line) => applyMarks(escapeHtml(line), marks))
+    .join("<br>");
+}
+
 function serializeInline(content: unknown[] | undefined): string {
   if (!content?.length) return "";
 
@@ -32,8 +43,8 @@ function serializeInline(content: unknown[] | undefined): string {
     .map((raw) => {
       const node = raw as Record<string, unknown>;
       if (node.type === "text") {
-        return applyMarks(
-          escapeHtml(String(node.text ?? "")),
+        return serializeTextNode(
+          String(node.text ?? ""),
           node.marks as MarkLike[] | undefined,
         );
       }

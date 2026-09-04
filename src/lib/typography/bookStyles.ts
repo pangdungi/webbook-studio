@@ -223,6 +223,7 @@ function proseContentCss(contentRoot: string, important = false) {
       text-align-last: left${i};
       text-justify: inter-word${i};
       text-indent: 1em${i};
+      white-space: pre-line${i};
       word-break: normal${i};
       overflow-wrap: break-word${i};
       line-break: loose${i};
