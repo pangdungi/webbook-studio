@@ -1,5 +1,8 @@
 import type { ImageAlignValue } from "@/components/editor/ImageAlignExtension";
 
+/** 편집기·독자·EPUB·PDF 본문 이미지 모서리 */
+export const BOOK_CONTENT_IMAGE_BORDER_RADIUS = "0.5rem";
+
 /** 페이지(열) 모드 — wrapper 안에서 text-align으로 정렬 */
 export const columnImageWrapperCss = `
   .webbook-img-wrap {
@@ -20,6 +23,7 @@ export const columnImageWrapperCss = `
     margin: 0 !important;
     float: none !important;
     vertical-align: top !important;
+    border-radius: ${BOOK_CONTENT_IMAGE_BORDER_RADIUS} !important;
   }
 `;
 

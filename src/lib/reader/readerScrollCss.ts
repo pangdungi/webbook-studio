@@ -18,6 +18,7 @@ import {
 } from "@/lib/pages/bookPageCss";
 import { readerPaginateMeasureCss } from "@/lib/reader/paginateFlowPages";
 import { readerScrollFullBleedCss } from "@/lib/reader/readerScrollFullBleedCss";
+import { BOOK_CONTENT_IMAGE_BORDER_RADIUS } from "@/lib/typography/imageLayout";
 import { readerHtmlScrollInjectCss } from "@/lib/typography/bookStyles";
 
 export const READER_SLIDE_W_VAR = "--reader-slide-w";
@@ -114,6 +115,7 @@ export function readerScrollSurfaceCss(
       height: auto${i};
       max-height: calc(var(--wbs-reader-vh, 100dvh) - 7rem)${i};
       object-fit: contain${i};
+      border-radius: ${BOOK_CONTENT_IMAGE_BORDER_RADIUS}${i};
     }
   `
     : `

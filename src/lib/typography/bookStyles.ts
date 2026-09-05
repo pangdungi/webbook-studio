@@ -29,7 +29,7 @@ import {
 } from "@/lib/pages/bookPageCss";
 import { readerContentProtectionCss } from "@/lib/reader/contentProtection";
 import { publishingReaderPageCss } from "@/lib/typography/publishingTypography";
-import { columnImageWrapperCss } from "@/lib/typography/imageLayout";
+import { columnImageWrapperCss, BOOK_CONTENT_IMAGE_BORDER_RADIUS } from "@/lib/typography/imageLayout";
 
 /** 본문 — CSS 변수(--wbs-font-body) 또는 명조 fallback */
 export { bookBodyFontFamilyVar as bookBodyFontFamily } from "@/lib/typography/bodyFonts";
@@ -238,8 +238,15 @@ function proseContentCss(contentRoot: string, important = false) {
     ${r} p.${bookBodyContinueClass} {
       text-indent: 0${i};
     }
-    ${r} h1 + p, ${r} h2 + p, ${r} h3 + p, ${r} hr + p, ${r} blockquote + p {
+    ${r} h1 + p,
+    ${r} h2:not(.book-page-subtitle) + p,
+    ${r} h3:not(.book-page-subtitle) + p,
+    ${r} hr + p,
+    ${r} blockquote + p {
       text-indent: 0${i};
+    }
+    ${r} .book-page-subtitle + p {
+      text-indent: 1em${i};
     }
     ${r} blockquote {
       font-size: 0.95em${i};
@@ -361,6 +368,7 @@ const readerImageAlignCss = `
 `;
 
 function proseImageCss(viewMode: "scroll" | "paginated") {
+  const imageRadius = `border-radius: ${BOOK_CONTENT_IMAGE_BORDER_RADIUS} !important;`;
   const scrollImageCss = `
     img {
       max-width: 100% !important;
@@ -368,6 +376,7 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
       height: auto !important;
       display: block !important;
       margin: 1.25em auto !important;
+      ${imageRadius}
       break-inside: avoid;
       -webkit-column-break-inside: avoid;
       page-break-inside: avoid;
@@ -380,6 +389,7 @@ function proseImageCss(viewMode: "scroll" | "paginated") {
       max-width: 100% !important;
       width: auto !important;
       height: auto !important;
+      ${imageRadius}
       break-inside: avoid;
       -webkit-column-break-inside: avoid;
       page-break-inside: avoid;
@@ -418,7 +428,7 @@ export function bookPageSubtitleCss(scope = "", important = false) {
       font-weight: 600${i};
       line-height: 1.55${i};
     }
-    ${p}.${bookPageClass}.${bookPageContentClass} .book-page-subtitle + p.book-body-p {
+    ${p}.${bookPageClass}.${bookPageContentClass} .book-page-subtitle + p {
       text-indent: 1em${i};
     }
   `;
@@ -471,7 +481,7 @@ export function bookEditorCss() {
     .book-page-prose .ProseMirror img {
       max-width: 100%;
       height: auto;
-      border-radius: 0.5rem;
+      border-radius: ${BOOK_CONTENT_IMAGE_BORDER_RADIUS};
       margin: 1.25em 0;
     }
     .book-page-prose .ProseMirror img[data-align="center"] {
