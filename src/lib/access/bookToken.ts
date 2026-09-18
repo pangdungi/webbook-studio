@@ -1,3 +1,7 @@
+import {
+  DEFAULT_TRIAL_DAYS,
+  TRIAL_READER_LABEL,
+} from "@/lib/access/trialAccess";
 import type { createClient } from "@/lib/supabase/server";
 import type { BookAccessToken } from "@/lib/types/database";
 import { buildReaderUrl, generateAccessToken } from "@/lib/utils/tokens";
@@ -47,6 +51,83 @@ export async function ensurePrimaryReaderToken(
 export function primaryReaderUrl(token: BookAccessToken | null): string | null {
   if (!token || token.revoked_at) return null;
   return buildReaderUrl(token.token);
+}
+
+export function readerTokenUrl(token: BookAccessToken): string {
+  return buildReaderUrl(token.token);
+}
+
+/** 영구(primary) 링크 — 기존 정식 독자 URL, 기간 제한 없음 */
+export function isPrimaryReaderToken(token: BookAccessToken): boolean {
+  return (
+    token.label === "primary" &&
+    !token.trial_days &&
+    !token.expires_at &&
+    !token.activated_at
+  );
+}
+
+export async function listBookAccessTokens(
+  supabase: Supabase,
+  bookId: string,
+): Promise<BookAccessToken[]> {
+  const { data, error } = await supabase
+    .from("book_access_tokens")
+    .select("*")
+    .eq("book_id", bookId)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+  return data ?? [];
+}
+
+/** 책당 7일권 공유 URL 하나 — 없으면 생성, 있으면 그대로 반환 */
+export async function getTrialReaderToken(
+  supabase: Supabase,
+  bookId: string,
+): Promise<BookAccessToken | null> {
+  const { data, error } = await supabase
+    .from("book_access_tokens")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("label", TRIAL_READER_LABEL)
+    .is("revoked_at", null)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function ensureTrialReaderToken(
+  supabase: Supabase,
+  bookId: string,
+  trialDays = DEFAULT_TRIAL_DAYS,
+): Promise<BookAccessToken> {
+  const existing = await getTrialReaderToken(supabase, bookId);
+  if (existing) return existing;
+
+  const token = generateAccessToken();
+  const { data, error } = await supabase
+    .from("book_access_tokens")
+    .insert({
+      book_id: bookId,
+      token,
+      label: TRIAL_READER_LABEL,
+      trial_days: trialDays,
+      activated_at: null,
+      expires_at: null,
+    })
+    .select()
+    .single();
+
+  if (error || !data) {
+    throw error ?? new Error("Failed to create trial reader token");
+  }
+
+  return data;
 }
 
 /** 목록 API — 책 ID별 대표 링크 */

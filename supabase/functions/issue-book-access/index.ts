@@ -64,9 +64,9 @@ Deno.serve(async (req) => {
       label ??
       (order_id ? `purchase-${order_id}` : email ? `email-${email}` : "general");
 
-    const expires_at =
-      typeof expires_in_days === "number"
-        ? new Date(Date.now() + expires_in_days * 86400000).toISOString()
+    const trial_days =
+      typeof expires_in_days === "number" && expires_in_days > 0
+        ? expires_in_days
         : null;
 
     const { data, error } = await supabase
@@ -75,7 +75,9 @@ Deno.serve(async (req) => {
         book_id,
         token,
         label: tokenLabel,
-        expires_at,
+        trial_days,
+        activated_at: null,
+        expires_at: null,
       })
       .select()
       .single();
@@ -94,6 +96,8 @@ Deno.serve(async (req) => {
       JSON.stringify({
         token: data.token,
         url: `${siteUrl}/read/${data.token}`,
+        trial_days: data.trial_days,
+        activated_at: data.activated_at,
         expires_at: data.expires_at,
         book_id,
       }),

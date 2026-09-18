@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { CopyField } from "@/components/home/CopyField";
+import { TimedAccessLinks } from "@/components/home/TimedAccessLinks";
 import {
   isLocalEditorClient,
   localEditorUrl,
@@ -18,6 +19,7 @@ export function BookDashboard() {
   const [books, setBooks] = useState<BookListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [duplicatingId, setDuplicatingId] = useState<string | null>(null);
 
   const loadBooks = useCallback(async () => {
     const res = await fetch("/api/books");
@@ -48,6 +50,39 @@ export function BookDashboard() {
     if (data.book) {
       router.push(`/admin/books/${data.book.id}/edit`);
     }
+  };
+
+  const duplicateBook = async (book: BookListItem) => {
+    if (!isLocalEditorClient()) {
+      window.alert(
+        `복제·편집은 로컬 개발 서버에서만 가능합니다.\n${localEditorUrl("/")}`,
+      );
+      return;
+    }
+
+    const label = book.title.trim() || "제목 없음";
+    if (
+      !window.confirm(
+        `「${label}」을(를) 복제할까요?\n\n제목·챕터·페이지·표지·본문 이미지·AI 분석·판매 카피가 모두 복사됩니다.\n독자 링크와 출판 파일은 새로 생성됩니다.`,
+      )
+    ) {
+      return;
+    }
+
+    setDuplicatingId(book.id);
+    const res = await fetch(`/api/books/${book.id}/duplicate`, {
+      method: "POST",
+    });
+    setDuplicatingId(null);
+
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.book) {
+      alert(data.error ?? "복제에 실패했습니다.");
+      return;
+    }
+
+    await loadBooks();
+    router.push(`/admin/books/${data.book.id}/edit`);
   };
 
   const deleteBook = async (book: BookListItem) => {
@@ -234,25 +269,41 @@ export function BookDashboard() {
                 {book.readerUrl ? (
                   <div className="mb-4">
                     <CopyField
-                    label={`「${displayTitle}」 독자 링크`}
+                    label={`「${displayTitle}」 영구 독자 링크`}
                     value={book.readerUrl}
                     hint={
                       isPublished
-                        ? "이 책 전용 주소입니다. txt·아임웹에 이 링크만 넣으세요."
+                        ? "정식 구매자용 주소입니다. 출판할 때마다 내용만 갱신됩니다."
                         : "출판 전까지는 열리지 않습니다. 출판 후 같은 주소로 읽을 수 있습니다."
                     }
                   />
                   </div>
                 ) : null}
 
+                <TimedAccessLinks
+                  bookId={book.id}
+                  bookTitle={displayTitle}
+                  isPublished={isPublished}
+                />
+
                 <div className="mt-auto flex flex-wrap gap-2">
                   {onLocal ? (
-                    <a
-                      href={`/admin/books/${book.id}/edit`}
-                      className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
-                    >
-                      편집
-                    </a>
+                    <>
+                      <a
+                        href={`/admin/books/${book.id}/edit`}
+                        className="rounded-lg bg-stone-900 px-3 py-1.5 text-xs font-medium text-white"
+                      >
+                        편집
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => duplicateBook(book)}
+                        disabled={duplicatingId === book.id}
+                        className="rounded-lg border border-stone-300 px-3 py-1.5 text-xs font-medium text-stone-800 disabled:opacity-50"
+                      >
+                        {duplicatingId === book.id ? "복제 중…" : "복제"}
+                      </button>
+                    </>
                   ) : null}
                   <a
                     href={`/admin/books/${book.id}/versions`}

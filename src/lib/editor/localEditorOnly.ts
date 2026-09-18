@@ -47,6 +47,7 @@ export function isEditorMutationApiPath(
 
   if (pathname === "/api/books") return true;
   if (/^\/api\/books\/[^/]+$/.test(pathname)) return true;
+  if (/^\/api\/books\/[^/]+\/duplicate$/.test(pathname)) return true;
   if (/^\/api\/books\/[^/]+\/chapters$/.test(pathname)) return true;
   if (/^\/api\/books\/[^/]+\/versions/.test(pathname)) return true;
   if (/^\/api\/chapters\/[^/]+$/.test(pathname)) return true;

@@ -62,6 +62,9 @@ export type BookAccessToken = {
   book_id: string;
   token: string;
   label: string;
+  /** 첫 접속 후 이용 일수 — expires_at은 첫 접속 시 설정 */
+  trial_days: number | null;
+  activated_at: string | null;
   expires_at: string | null;
   revoked_at: string | null;
   created_at: string;

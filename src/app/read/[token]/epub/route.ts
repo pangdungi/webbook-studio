@@ -1,17 +1,21 @@
-import { validateReaderToken } from "@/lib/access/validate";
+import {
+  applyTrialVisitorCookieToResponse,
+  validateReaderRouteAccess,
+} from "@/lib/access/readerRouteAccess";
 import { streamEpubFromStorage } from "@/lib/epub/streamEpub";
+import type { NextRequest } from "next/server";
 
 type RouteContext = { params: Promise<{ token: string }> };
 
-export async function GET(_request: Request, context: RouteContext) {
+export async function GET(request: NextRequest, context: RouteContext) {
   const { token } = await context.params;
-  const record = await validateReaderToken(token);
+  const access = await validateReaderRouteAccess(request, token);
 
-  if (!record) {
+  if (!access.record) {
     return new Response("Forbidden", { status: 403 });
   }
 
-  const book = record.books;
+  const book = access.record.books;
   if (book.status !== "published" || !book.epub_storage_path) {
     return new Response("Not found", { status: 404 });
   }
@@ -21,5 +25,6 @@ export async function GET(_request: Request, context: RouteContext) {
     return new Response("EPUB unavailable", { status: 500 });
   }
 
-  return response;
+  const secure = new URL(request.url).protocol === "https:";
+  return applyTrialVisitorCookieToResponse(response, token, access, secure);
 }
