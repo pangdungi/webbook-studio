@@ -10,6 +10,10 @@ import {
   buildBookCoverEpubHtml,
   buildPageEpubHtml,
 } from "@/lib/typography/pageLayout";
+import {
+  BOOK_EDITOR_PAGE_HEIGHT_PX,
+  BOOK_EDITOR_PAGE_WIDTH_PX,
+} from "@/lib/pdf/bookPdfLayout";
 import { bookPdfTypographyCss } from "@/lib/pdf/bookPdfTypography";
 import {
   bookTypographyFontFaceCss,
@@ -33,7 +37,7 @@ function writingModeCss(mode: WritingMode) {
 function bookPdfPrintCss() {
   return `
     @page {
-      size: A4;
+      size: ${BOOK_EDITOR_PAGE_WIDTH_PX}px ${BOOK_EDITOR_PAGE_HEIGHT_PX}px;
       margin: 0;
     }
     html, body {
@@ -45,7 +49,7 @@ function bookPdfPrintCss() {
       page-break-after: always;
       break-after: page;
       display: block !important;
-      width: 210mm !important;
+      width: ${BOOK_EDITOR_PAGE_WIDTH_PX}px !important;
       max-width: none !important;
       margin: 0 !important;
       padding: 0 !important;
@@ -56,10 +60,10 @@ function bookPdfPrintCss() {
       break-after: auto;
     }
     .${bookPageClass} {
-      width: 210mm !important;
-      height: 297mm !important;
-      min-height: 297mm !important;
-      max-height: 297mm !important;
+      width: ${BOOK_EDITOR_PAGE_WIDTH_PX}px !important;
+      height: ${BOOK_EDITOR_PAGE_HEIGHT_PX}px !important;
+      min-height: ${BOOK_EDITOR_PAGE_HEIGHT_PX}px !important;
+      max-height: ${BOOK_EDITOR_PAGE_HEIGHT_PX}px !important;
       margin: 0 !important;
       box-shadow: none !important;
       overflow: hidden !important;

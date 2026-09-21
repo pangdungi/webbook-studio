@@ -63,6 +63,11 @@ export const bookQuotePageClass = "book-quote-page";
 export const bookQuoteTextClass = "book-quote-text";
 export const bookQuoteSourceClass = "book-quote-source";
 
+/** 편집기·PDF·EPUB 공통 페이지 박스 (672×950 @ 16px) */
+export function bookSharedPageBoxCss(p: string, important = false) {
+  return pageBoxCss(p, important);
+}
+
 function pageBoxCss(p: string, important = false) {
   const i = important ? " !important" : "";
 
